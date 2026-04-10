@@ -14,9 +14,9 @@ export function getAuthUser(request: NextRequest) {
 export function requireAuth(request: NextRequest) {
   const user = getAuthUser(request)
   if (!user) {
-    return { error: 'Unauthorized', status: 401 }
+    return { error: 'Unauthorized', status: 401, user: undefined }
   }
-  return { user }
+  return { user, error: undefined, status: undefined }
 }
 
 export function requireRole(request: NextRequest, allowedRoles: string[]) {
@@ -25,9 +25,9 @@ export function requireRole(request: NextRequest, allowedRoles: string[]) {
     return authResult
   }
 
-  if (!allowedRoles.includes(authResult.user.role)) {
-    return { error: 'Forbidden', status: 403 }
+  if (!allowedRoles.includes(authResult.user!.role)) {
+    return { error: 'Forbidden', status: 403, user: undefined }
   }
 
-  return { user: authResult.user }
+  return { user: authResult.user, error: undefined, status: undefined }
 }

@@ -30,7 +30,7 @@ export async function GET(
       )
     }
 
-    if (authResult.user.role !== 'approver' && investment.user_id !== authResult.user.userId) {
+    if (authResult.user!.role !== 'approver' && investment.user_id !== authResult.user!.userId) {
       return NextResponse.json(
         { error: 'Forbidden' },
         { status: 403 }

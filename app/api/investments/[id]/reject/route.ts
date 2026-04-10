@@ -41,14 +41,14 @@ export async function PATCH(
       data: {
         status: 'rejected',
         reviewed_at: new Date(),
-        reviewed_by: authResult.user.userId,
+        reviewed_by: authResult.user!.userId,
         notes: notes || null,
       },
     })
 
     await prisma.auditLog.create({
       data: {
-        user_id: authResult.user.userId,
+        user_id: authResult.user!.userId,
         action: 'reject_investment',
         entity_type: 'investment_request',
         entity_id: params.id,

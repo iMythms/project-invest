@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const investmentRequest = await prisma.investmentRequest.create({
       data: {
-        user_id: authResult.user.userId,
+        user_id: authResult.user!.userId,
         opportunity_id: opportunityId,
         amount: amount,
         status: 'pending',
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     await prisma.auditLog.create({
       data: {
-        user_id: authResult.user.userId,
+        user_id: authResult.user!.userId,
         action: 'submit_investment',
         entity_type: 'investment_request',
         entity_id: investmentRequest.id,
@@ -89,8 +89,8 @@ export async function GET(request: NextRequest) {
   try {
     let whereClause: any = {}
 
-    if (authResult.user.role !== 'approver') {
-      whereClause = { user_id: authResult.user.userId }
+    if (authResult.user!.role !== 'approver') {
+      whereClause = { user_id: authResult.user!.userId }
     }
 
     const investments = await prisma.investmentRequest.findMany({
