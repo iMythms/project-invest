@@ -1,4 +1,4 @@
-import HugeiconsIcon, { type IconSvgElement } from '@hugeicons/react'
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 
 type IconTone = 'default' | 'brand' | 'success' | 'warning' | 'danger'
 
