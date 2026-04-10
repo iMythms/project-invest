@@ -9,24 +9,26 @@ Default the information hierarchy to the `approver` role because that role sees 
 This system should feel:
 - Institutional, calm, and credible
 - Premium through restraint, not decoration
-- Efficient for real work, not styled like consumer fintech
+- Efficient for real work, not styled like generic CRUD or noisy consumer fintech
 - Clear on desktop and tablet first, with solid mobile fallback for auth and lighter review flows
+- Public-facing on the outside, operationally disciplined on the inside
 
 When elegance and operational speed compete, choose operational speed.
 
 ## 2. Visual Theme And Atmosphere
 
-Reference direction: trust-first fintech restraint with private-office polish.
+Reference direction: Tanami-style institutional credibility combined with Coinbase-style landing-page clarity and blue-accent trust cues.
 
 The UI should read as:
 - Light-first
-- Balanced density
-- Softly layered
+- Airy on public pages, tighter inside the app
+- Softly layered, never bulky
 - Minimal motion
-- Minimal imagery
+- Minimal but strategic imagery or product mockups
 - Executive in tone, but still practical for daily operations
 
 Avoid loud gradients, neon accents, glossy startup visuals, oversized marketing gestures, and playful consumer patterns.
+Avoid heavy cards stacked on tinted backgrounds. Prefer cleaner white sections, thinner borders, more breathing room, and fewer nested containers.
 
 ## 3. Color Palette And Roles
 
@@ -53,6 +55,7 @@ Avoid loud gradients, neon accents, glossy startup visuals, oversized marketing 
 | `trust-500` | `#3B82F6` | Focus ring, chart highlight, selected states |
 | `trust-100` | `#DBEAFE` | Selected row, active pill background |
 | `trust-50` | `#EFF6FF` | Soft brand wash |
+| `trust-25` | `#F8FBFF` | Public hero wash, very soft highlight sections |
 
 ### Semantic Status Colors
 
@@ -73,6 +76,8 @@ Use muted but clear semantics. Color supports meaning; labels and icons must sti
 
 Primary direction: modern sans-serif with disciplined hierarchy. Use `Inter` or a similar neutral grotesk. Monospace is allowed only for IDs, audit metadata, exact values, and code-like fields.
 
+Public pages should feel closer to editorial fintech marketing than to a dashboard. Headlines may be larger and more spacious than the internal app, but they should still remain controlled and trustworthy.
+
 ### Type Hierarchy
 
 | Usage | Size | Weight | Notes |
@@ -91,6 +96,8 @@ Primary direction: modern sans-serif with disciplined hierarchy. Use `Inter` or 
 - Keep line lengths moderate on auth and public pages
 - Use tighter spacing for tables and metadata, more open spacing for auth and landing sections
 - Let typography and whitespace carry the premium quality
+- Prefer fewer words with stronger line breaks on hero sections
+- On public pages, use large but clean headline blocks rather than dense feature-card walls
 
 ## 5. Layout Principles
 
@@ -115,7 +122,10 @@ Suggested navigation order:
 
 - Public pages should be cleaner and more spacious than the app core
 - Auth screens should feel secure, minimal, and quiet
-- Avoid consumer-marketing hero patterns; use concise copy and restrained supporting visuals
+- Public marketing can borrow from Coinbase-style section rhythm: large headline, clear CTA, product mockup, trust proof, and simplified feature rows
+- Tanami-style proof elements are encouraged: manager logos, credibility statements, governance language, access framing
+- Avoid stuffing public pages with too many boxed cards. Use more open sections, restrained dividers, and only a few high-value surfaces
+- Login pages must never expose seeded demo accounts or passwords directly in the UI
 
 ### Spacing Scale
 
@@ -127,6 +137,7 @@ Use:
 - `24px` to `32px` between major dashboard sections
 - `12px` to `16px` between stacked form fields
 - `8px` vertical rhythm inside tables and metadata groups
+- On landing pages, allow `48px` to `88px` between major sections when that creates cleaner pacing
 
 ## 6. Depth And Elevation
 
@@ -147,6 +158,7 @@ Suggested elevation behavior:
 - Default cards: light border + subtle shadow
 - Hoverable cards: slightly stronger shadow, no large lift animation
 - Dropdowns and modals: crisp border, calm shadow, strong layering clarity
+- Public sections should often work without card chrome at all; use cards only when they add structure
 
 ## 7. Component Stylings
 
@@ -174,6 +186,7 @@ Button rules:
 - Use medium radius, not pill shapes
 - Avoid oversized CTAs in the app shell
 - Keep padding disciplined and predictable
+- On landing pages, primary CTAs may be slightly more prominent, but still clean and compact rather than oversized pills
 
 ### Inputs
 
@@ -187,6 +200,7 @@ Button rules:
 - Use for KPIs, summaries, approval context, and document metadata
 - Prefer simple headers and one dominant value or insight per card
 - Avoid stuffing multiple unrelated metrics into one card
+- On public pages, use fewer cards overall. Prefer one strong mockup panel or one trust panel instead of repeated equal-weight boxes
 
 ### Tables
 
@@ -216,6 +230,22 @@ Table rules:
 - Calm and direct, never playful
 - Include one sentence explaining the state and one relevant next action
 - Light iconography is acceptable; illustration-heavy empty states are not
+
+### Public Landing Composition
+
+Landing pages should use a clear marketing rhythm:
+- slim top navigation
+- one hero section with headline, supporting copy, CTA group, and trust/product mockup
+- one trust proof strip or manager/logo band
+- one or two product explanation sections with alternating text and visual emphasis
+- one closing CTA section
+- quiet footer
+
+Public page rules:
+- maintain generous whitespace
+- do not turn every content chunk into a bordered panel
+- use blue selectively to pull the eye toward trust and action
+- use screenshots, mock surfaces, or product frames rather than decorative illustration when possible
 
 ## 8. Data Visualization Guidance
 
@@ -279,7 +309,8 @@ Avoid:
 Imagery should be minimal.
 
 - Prefer abstract linework, subtle grid texture, architectural cropping, or quiet financial motifs if imagery is needed
-- Do not rely on stock-trader cliches, crypto visuals, or exuberant business photography
+- Do not rely on stock-trader cliches or exuberant business photography
+- Screenshots or product mock frames inspired by trusted fintech sites are acceptable when they reinforce clarity and control
 - Icons should be simple, crisp, and outline-first or lightly filled
 
 ## 13. Do And Do Not
@@ -292,6 +323,7 @@ Imagery should be minimal.
 - Make approvals and audit trails feel controlled and high-confidence
 - Use deep blue selectively as the main accent
 - Let tables and workflow views drive the product identity
+- Let public pages feel polished and inviting without becoming loud or promotional
 
 ### Do Not
 
@@ -301,6 +333,7 @@ Imagery should be minimal.
 - Do not over-round controls or surfaces
 - Do not make dashboards look like marketing pages
 - Do not trade legibility for visual cleverness
+- Do not expose demo credentials or passwords in production-facing auth screens
 
 ## 14. Agent Implementation Guide
 
@@ -310,6 +343,7 @@ When generating UI for this project:
 - Use a left sidebar for authenticated pages
 - Optimize the visual hierarchy for approver workflows first
 - Keep auth and public pages more spacious, but within the same restrained design language
+- For the landing page, combine Tanami-style trust framing with Coinbase-style airy section pacing and blue-led CTA emphasis
 - Favor clean tables, muted badges, measured typography, and disciplined spacing
 - Use blue as the primary accent and keep semantic colors subdued
 - If unsure, choose the more conservative and operationally clear design option

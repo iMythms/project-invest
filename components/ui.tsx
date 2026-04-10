@@ -46,7 +46,7 @@ export function StatusBadge({
 
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium ${badgeToneClasses[resolvedTone]}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeToneClasses[resolvedTone]}`}
     >
       {label}
     </span>
@@ -65,10 +65,10 @@ export function PageHeader({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
-      <div className="space-y-2">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-1.5">
         {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <h1 className="page-title">{title}</h1>
           <p className="page-description max-w-3xl">{description}</p>
         </div>
@@ -83,17 +83,22 @@ export function MetricCard({
   value,
   description,
   tone = 'default',
+  icon,
 }: {
   label: string
   value: string
   description: string
   tone?: MetricTone
+  icon?: ReactNode
 }) {
   return (
-    <div className={`surface-card p-5 ${metricToneClasses[tone]}`}>
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
-      <p className="mt-2 text-sm text-slate-500">{description}</p>
+    <div className={`surface-card p-3.5 ${metricToneClasses[tone]}`}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[13px] font-medium text-slate-500">{label}</p>
+        {icon ? <div className="shrink-0">{icon}</div> : null}
+      </div>
+      <p className="mt-2.5 text-[24px] font-semibold tracking-tight text-slate-900">{value}</p>
+      <p className="mt-1.5 text-[13px] leading-5 text-slate-500">{description}</p>
     </div>
   )
 }
@@ -102,16 +107,21 @@ export function SectionCard({
   title,
   description,
   children,
+  actions,
 }: {
   title: string
   description?: string
   children: ReactNode
+  actions?: ReactNode
 }) {
   return (
-    <section className="surface-card p-6">
-      <div className="mb-5 space-y-1">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        {description ? <p className="text-sm text-slate-500">{description}</p> : null}
+    <section className="surface-card p-4 sm:p-5">
+      <div className="mb-3.5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+          {description ? <p className="text-[13px] leading-5 text-slate-500">{description}</p> : null}
+        </div>
+        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
       {children}
     </section>
@@ -128,9 +138,9 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="surface-card px-6 py-12 text-center">
+    <div className="surface-card px-5 py-8 text-center">
       <div className="mx-auto max-w-md space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
         <p className="text-sm leading-6 text-slate-500">{description}</p>
         {action ? <div className="pt-2">{action}</div> : null}
       </div>
@@ -140,7 +150,7 @@ export function EmptyState({
 
 export function LoadingState({ label }: { label: string }) {
   return (
-    <div className="surface-card px-6 py-12 text-center">
+    <div className="surface-card px-5 py-8 text-center">
       <p className="text-sm font-medium text-slate-600">{label}</p>
     </div>
   )

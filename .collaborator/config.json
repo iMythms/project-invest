@@ -1,4 +1,8 @@
 {
-  "expanded_dirs": [],
+  "expanded_dirs": [
+    "/Users/mytham/Developer/project-invest/.opencode",
+    "/Users/mytham/Developer/project-invest/.opencode/skills",
+    "/Users/mytham/Developer/project-invest/.opencode/skills/docs"
+  ],
   "agent_skip_permissions": false
 }
