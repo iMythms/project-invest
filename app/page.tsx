@@ -2,41 +2,68 @@ import Link from 'next/link'
 
 export default function Home() {
   return (
-    <main className="min-h-screen p-8 bg-gray-50">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow p-8">
-          <h1 className="text-3xl font-bold mb-4">Family Office Investment Portal</h1>
-          <p className="text-gray-600 mb-8">
-            Manage investment opportunities and requests with role-based access control.
+    <main className="min-h-screen bg-slate-50 px-4 py-12 sm:px-6 lg:px-8 lg:py-20">
+      <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+        <section className="surface-card p-8 sm:p-10">
+          <p className="page-eyebrow">Family office investment portal</p>
+          <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
+            Controlled investment workflows for private-office operations.
+          </h1>
+          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600">
+            Review opportunities, submit capital requests, approve decisions, and inspect the
+            audit trail from one institutional workspace designed for operational clarity.
           </p>
 
-          <div className="flex space-x-4">
-            <Link
-              href="/login"
-              className="py-2 px-6 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Login
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/login" className="btn-primary">
+              Sign in
             </Link>
-            <Link
-              href="/dashboard"
-              className="py-2 px-6 border border-gray-300 rounded-md hover:bg-gray-50"
-            >
+            <Link href="/dashboard" className="btn-secondary">
               Dashboard
             </Link>
           </div>
 
-          <div className="mt-8 border-t pt-6">
-            <h2 className="text-lg font-semibold mb-3">Features</h2>
-            <ul className="space-y-2 text-gray-600">
-              <li>• Multi-user authentication with JWT</li>
-              <li>• Role-based access control (viewer, investor, approver)</li>
-              <li>• Browse investment opportunities</li>
-              <li>• Submit and track investment requests</li>
-              <li>• Approve/reject requests (for approvers)</li>
-              <li>• Comprehensive audit logging</li>
-            </ul>
+          <div className="mt-10 grid gap-4 border-t border-slate-200 pt-8 sm:grid-cols-3">
+            <div>
+              <p className="text-sm font-medium text-slate-500">Opportunity review</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Open opportunity intake with minimums, availability, and role-aware actions.
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Capital requests</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Structured request submission, approval routing, and status visibility by role.
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Audit confidence</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Review immutable activity history for governance, compliance, and internal control.
+              </p>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <aside className="surface-card p-6 sm:p-8">
+          <h2 className="text-lg font-semibold text-slate-900">Operational scope</h2>
+          <div className="mt-6 space-y-5">
+            <div className="surface-subtle p-4">
+              <p className="text-sm font-medium text-slate-900">Approver-first information hierarchy</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                The workspace prioritizes approval queue speed, investment visibility, and audit
+                inspection without adding consumer-fintech noise.
+              </p>
+            </div>
+            <div className="surface-subtle p-4">
+              <p className="text-sm font-medium text-slate-900">Role-aware experience</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Viewer, investor, and approver permissions share one design language while exposing
+                only relevant controls.
+              </p>
+            </div>
+          </div>
+        </aside>
       </div>
     </main>
   )

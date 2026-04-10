@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useRouter } from 'next/navigation'
+import { EmptyState, LoadingState, MetricCard, PageHeader, StatusBadge } from '@/components/ui'
+import { formatDateTime, formatLabel } from '@/lib/format'
 
 interface AuditLog {
   id: string
@@ -24,6 +26,8 @@ export default function AuditPage() {
   const [dataLoading, setDataLoading] = useState(true)
   const [actionFilter, setActionFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const router = useRouter()
 
   useEffect(() => {
@@ -48,20 +52,22 @@ export default function AuditPage() {
         page: page.toString(),
         limit: '50',
       })
-      
+
       if (actionFilter) {
         params.append('action', actionFilter)
       }
 
       const response = await fetch(`/api/audit-logs?${params}`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
       if (response.ok) {
         const data = await response.json()
         setLogs(data.logs)
+        setTotal(data.pagination.total)
+        setTotalPages(data.pagination.totalPages)
       }
     } catch (error) {
       console.error('Failed to fetch audit logs:', error)
@@ -71,7 +77,7 @@ export default function AuditPage() {
   }
 
   if (loading || !user) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+    return <LoadingState label="Loading audit log..." />
   }
 
   if (user.role !== 'approver') {
@@ -79,86 +85,135 @@ export default function AuditPage() {
   }
 
   return (
-    <main className="min-h-screen p-8 bg-gray-50">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Audit Logs</h1>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Governance history"
+        title="Audit log"
+        description="Inspect authenticated user activity and workflow events across login, submission, and approval operations."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-500" htmlFor="actionFilter">
+              Action filter
+            </label>
+            <select
+              id="actionFilter"
+              value={actionFilter}
+              onChange={(e) => {
+                setPage(1)
+                setActionFilter(e.target.value)
+              }}
+              className="select-field min-w-[220px]"
+            >
+              <option value="">All actions</option>
+              <option value="login_success">Login success</option>
+              <option value="login_failed">Login failed</option>
+              <option value="submit_investment">Submit investment</option>
+              <option value="approve_investment">Approve investment</option>
+              <option value="reject_investment">Reject investment</option>
+            </select>
+          </div>
+        }
+      />
 
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
-          >
-            <option value="">All Actions</option>
-            <option value="login_success">Login Success</option>
-            <option value="login_failed">Login Failed</option>
-            <option value="submit_investment">Submit Investment</option>
-            <option value="approve_investment">Approve Investment</option>
-            <option value="reject_investment">Reject Investment</option>
-          </select>
-        </div>
+      <section className="grid gap-4 md:grid-cols-3">
+        <MetricCard
+          label="Visible events"
+          value={String(logs.length)}
+          description="Events currently returned on this page."
+          tone="brand"
+        />
+        <MetricCard
+          label="Total matched events"
+          value={String(total)}
+          description="Event count for the current filter criteria."
+        />
+        <MetricCard
+          label="Current page"
+          value={`${page} / ${totalPages}`}
+          description="Navigate through the retained audit history."
+          tone="warning"
+        />
+      </section>
 
-        {dataLoading ? (
-          <div className="text-center py-8">Loading audit logs...</div>
-        ) : logs.length === 0 ? (
-          <div className="text-center py-8 text-gray-600">No audit logs found</div>
-        ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+      {dataLoading ? (
+        <LoadingState label="Loading audit events..." />
+      ) : logs.length === 0 ? (
+        <EmptyState
+          title="No audit logs found"
+          description="Try widening the current action filter or return later once additional activity has been recorded."
+        />
+      ) : (
+        <div className="table-shell">
+          <div className="table-container">
+            <table className="data-table min-w-[1100px]">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entity</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                  <th>Timestamp</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Entity</th>
+                  <th>Details</th>
+                  <th>IP address</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {logs.map((log) => (
                   <tr key={log.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(log.timestamp).toLocaleString()}
+                    <td>
+                      <p className="font-medium text-slate-900">{formatDateTime(log.timestamp)}</p>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {log.user ? `${log.user.name} (${log.user.email})` : 'Unknown'}
+                    <td>
+                      <div>
+                        <p className="font-medium text-slate-900">
+                          {log.user ? log.user.name : 'Unknown actor'}
+                        </p>
+                        <p className="mt-1 text-slate-500">{log.user ? log.user.email : '-'}</p>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className="px-2 py-1 text-xs rounded bg-gray-100">
-                        {log.action}
-                      </span>
+                    <td>
+                      <StatusBadge label={formatLabel(log.action)} tone="brand" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {log.entity_type ? `${log.entity_type}: ${log.entity_id}` : '-'}
+                    <td>
+                      {log.entity_type ? (
+                        <div>
+                          <p className="font-medium text-slate-900">{formatLabel(log.entity_type)}</p>
+                          <p className="mono-text mt-1">{log.entity_id}</p>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {log.ip_address || '-'}
+                    <td>
+                      <p className="max-w-sm break-words leading-6 text-slate-500">
+                        {log.details ? JSON.stringify(log.details) : '-'}
+                      </p>
                     </td>
+                    <td>{log.ip_address || '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="flex justify-center mt-6 space-x-2">
-          <button
-            onClick={() => setPage(page - 1)}
-            disabled={page === 1}
-            className="px-4 py-2 border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50"
-          >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-500">
+          Showing page {page} of {totalPages} across {total} matched events.
+        </p>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setPage(page - 1)} disabled={page === 1} className="btn-secondary">
             Previous
           </button>
-          <span className="px-4 py-2 text-gray-600">Page {page}</span>
           <button
             onClick={() => setPage(page + 1)}
-            disabled={logs.length < 50}
-            className="px-4 py-2 border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50"
+            disabled={page >= totalPages}
+            className="btn-secondary"
           >
             Next
           </button>
         </div>
       </div>
-    </main>
+    </div>
   )
 }

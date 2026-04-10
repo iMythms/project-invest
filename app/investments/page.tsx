@@ -1,8 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth-context'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { EmptyState, LoadingState, MetricCard, PageHeader, StatusBadge } from '@/components/ui'
+import { formatCurrency, formatDate, formatLabel } from '@/lib/format'
 
 interface Investment {
   id: string
@@ -26,7 +29,6 @@ export default function InvestmentsPage() {
   const [dataLoading, setDataLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   useEffect(() => {
     if (!loading && !user) {
@@ -43,7 +45,7 @@ export default function InvestmentsPage() {
     try {
       const response = await fetch('/api/investments', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
@@ -58,90 +60,137 @@ export default function InvestmentsPage() {
     }
   }
 
-  const filteredInvestments = investments.filter((inv) => {
-    if (statusFilter === 'all') return true
-    return inv.status === statusFilter
+  const filteredInvestments = investments.filter((investment) => {
+    if (statusFilter === 'all') {
+      return true
+    }
+
+    return investment.status === statusFilter
   })
 
   if (loading || !user) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+    return <LoadingState label="Loading investments..." />
   }
 
+  const pendingCount = investments.filter((investment) => investment.status === 'pending').length
+  const approvedCount = investments.filter((investment) => investment.status === 'approved').length
+  const totalVisibleVolume = filteredInvestments.reduce(
+    (total, investment) => total + Number.parseFloat(investment.amount),
+    0
+  )
+
   return (
-    <main className="min-h-screen p-8 bg-gray-50">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">
-            {user.role === 'approver' ? 'All Investment Requests' : 'My Investments'}
-          </h1>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow={user.role === 'approver' ? 'Request oversight' : 'Investment history'}
+        title={user.role === 'approver' ? 'Investments' : 'My investments'}
+        description={
+          user.role === 'approver'
+            ? 'Review the full request ledger, monitor pending approvals, and inspect final outcomes.'
+            : 'Track your submitted requests, their current status, and review timing.'
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-500" htmlFor="statusFilter">
+              Status filter
+            </label>
+            <select
+              id="statusFilter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="select-field min-w-[180px]"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        }
+      />
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
+      <section className="grid gap-4 md:grid-cols-3">
+        <MetricCard
+          label="Visible requests"
+          value={String(filteredInvestments.length)}
+          description="Requests currently returned under the selected filter."
+          tone="brand"
+        />
+        <MetricCard
+          label="Pending"
+          value={String(pendingCount)}
+          description="Requests still waiting for a final review outcome."
+          tone="warning"
+        />
+        <MetricCard
+          label="Visible volume"
+          value={formatCurrency(totalVisibleVolume)}
+          description={`Approved requests: ${approvedCount}`}
+        />
+      </section>
 
-        {dataLoading ? (
-          <div className="text-center py-8">Loading investments...</div>
-        ) : filteredInvestments.length === 0 ? (
-          <div className="text-center py-8 text-gray-600">No investment requests found</div>
-        ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+      {dataLoading ? (
+        <LoadingState label="Loading investments..." />
+      ) : filteredInvestments.length === 0 ? (
+        <EmptyState
+          title="No investment requests found"
+          description="Adjust the current filter or create a new investment request from an open opportunity."
+          action={
+            (user.role === 'investor' || user.role === 'approver') && (
+              <Link href="/opportunities" className="btn-primary">
+                Review opportunities
+              </Link>
+            )
+          }
+        />
+      ) : (
+        <div className="table-shell">
+          <div className="table-container">
+            <table className="data-table min-w-[980px]">
+              <thead>
                 <tr>
-                  {user.role === 'approver' && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                  )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opportunity</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reviewed</th>
+                  {user.role === 'approver' && <th>Requestor</th>}
+                  <th>Opportunity</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
+                  <th>Reviewed</th>
+                  <th>Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {filteredInvestments.map((inv) => (
                   <tr key={inv.id}>
                     {user.role === 'approver' && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {inv.user?.name} ({inv.user?.email})
+                      <td>
+                        <div>
+                          <p className="font-medium text-slate-900">{inv.user?.name || 'Unknown user'}</p>
+                          <p className="mt-1 text-slate-500">{inv.user?.email || '-'}</p>
+                        </div>
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {inv.opportunity.name}
+                    <td>
+                      <div>
+                        <p className="font-medium text-slate-900">{inv.opportunity.name}</p>
+                        <p className="mono-text mt-1">{inv.id}</p>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ${parseFloat(inv.amount).toLocaleString()}
+                    <td className="font-medium text-slate-900">{formatCurrency(inv.amount)}</td>
+                    <td>
+                      <StatusBadge label={formatLabel(inv.status)} />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        inv.status === 'approved' ? 'bg-green-100 text-green-700' :
-                        inv.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {inv.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(inv.submitted_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {inv.reviewed_at ? new Date(inv.reviewed_at).toLocaleDateString() : '-'}
+                    <td>{formatDate(inv.submitted_at)}</td>
+                    <td>{formatDate(inv.reviewed_at)}</td>
+                    <td>
+                      <p className="max-w-xs leading-6 text-slate-500">{inv.notes || '-'}</p>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-    </main>
+        </div>
+      )}
+    </div>
   )
 }

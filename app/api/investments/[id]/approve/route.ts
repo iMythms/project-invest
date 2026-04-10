@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/api-auth'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const authResult = requireRole(request, ['approver'])
   if (authResult.error) {
@@ -15,11 +15,12 @@ export async function PATCH(
   }
 
   try {
+    const { id } = await params
     const body = await request.json()
     const { notes } = body
 
     const investment = await prisma.investmentRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!investment) {
@@ -37,7 +38,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.investmentRequest.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: 'approved',
         reviewed_at: new Date(),
@@ -51,7 +52,7 @@ export async function PATCH(
         user_id: authResult.user!.userId,
         action: 'approve_investment',
         entity_type: 'investment_request',
-        entity_id: params.id,
+        entity_id: id,
         details: { notes },
         ip_address: request.headers.get('x-forwarded-for') || null,
       },
