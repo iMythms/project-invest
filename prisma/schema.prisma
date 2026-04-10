@@ -1,0 +1,101 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  viewer
+  investor
+  approver
+}
+
+enum OpportunityStatus {
+  open
+  closed
+}
+
+enum RequestStatus {
+  pending
+  approved
+  rejected
+}
+
+model FamilyOffice {
+  id        String   @id @default(uuid())
+  name      String
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("family_offices")
+}
+
+model User {
+  id             String      @id @default(uuid())
+  email          String      @unique
+  password_hash  String
+  name           String
+  role           UserRole
+  family_office_id String
+  familyOffice   FamilyOffice @relation(fields: [family_office_id], references: [id])
+  investmentRequests InvestmentRequest[]
+  reviewedRequests InvestmentRequest[] @relation("ReviewedRequests")
+  auditLogs      AuditLog[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@map("users")
+}
+
+model InvestmentOpportunity {
+  id               String   @id @default(uuid())
+  name             String
+  description      String
+  minimum_investment Decimal
+  status           OpportunityStatus
+  investmentRequests InvestmentRequest[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("investment_opportunities")
+}
+
+model InvestmentRequest {
+  id           String        @id @default(uuid())
+  user_id      String
+  user         User          @relation(fields: [user_id], references: [id])
+  opportunity_id String
+  opportunity  InvestmentOpportunity @relation(fields: [opportunity_id], references: [id])
+  amount       Decimal
+  status       RequestStatus
+  submitted_at DateTime      @default(now())
+  reviewed_at  DateTime?
+  reviewed_by  String?
+  reviewer     User?         @relation("ReviewedRequests", fields: [reviewed_by], references: [id])
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("investment_requests")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  user_id     String?
+  user        User?    @relation(fields: [user_id], references: [id])
+  action      String
+  entity_type String?
+  entity_id   String?
+  details     Json
+  ip_address  String?
+  timestamp   DateTime @default(now())
+
+  @@map("audit_logs")
+}

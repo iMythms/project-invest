@@ -1,0 +1,68 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
+import { requireRole } from '@/lib/api-auth'
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const authResult = requireRole(request, ['approver'])
+  if (authResult.error) {
+    return NextResponse.json(
+      { error: authResult.error },
+      { status: authResult.status }
+    )
+  }
+
+  try {
+    const body = await request.json()
+    const { notes } = body
+
+    const investment = await prisma.investmentRequest.findUnique({
+      where: { id: params.id },
+    })
+
+    if (!investment) {
+      return NextResponse.json(
+        { error: 'Investment not found' },
+        { status: 404 }
+      )
+    }
+
+    if (investment.status !== 'pending') {
+      return NextResponse.json(
+        { error: 'Only pending requests can be approved' },
+        { status: 400 }
+      )
+    }
+
+    const updated = await prisma.investmentRequest.update({
+      where: { id: params.id },
+      data: {
+        status: 'approved',
+        reviewed_at: new Date(),
+        reviewed_by: authResult.user.userId,
+        notes: notes || null,
+      },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        user_id: authResult.user.userId,
+        action: 'approve_investment',
+        entity_type: 'investment_request',
+        entity_id: params.id,
+        details: { notes },
+        ip_address: request.headers.get('x-forwarded-for') || null,
+      },
+    })
+
+    return NextResponse.json(updated)
+  } catch (error) {
+    console.error('Approve investment error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
