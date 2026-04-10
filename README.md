@@ -13,51 +13,56 @@ Professional B2B investment portal for family offices with multi-user authentica
 Source of truth: API routes in `app/api/*/route.ts`, Prisma schema in `prisma/schema.prisma`, page components in `app/*/page.tsx`.
 
 ```mermaid
-architecture-beta
-    group public[Public Layer]
-    service landing(app/page.tsx)
-    service login(app/login/page.tsx)
-    
-    group authenticated[Authenticated Shell]
-    service sidebar(components/ui/sidebar.tsx)
-    service dashboard(app/dashboard/page.tsx)
-    service opportunities(app/opportunities/page.tsx)
-    service investments(app/investments/page.tsx)
-    service approve(app/approve/page.tsx)
-    service audit(app/audit/page.tsx)
-    
-    group api[API Layer]
-    service authRoute(api/auth/route.ts)
-    service oppRoute(api/opportunities/route.ts)
-    service invRoute(api/investments/route.ts)
-    service auditRoute(api/audit-logs/route.ts)
-    
-    group data[Data Layer]
-    service postgres(PostgreSQL 15)
-    service prismaClient(lib/db.ts)
-    
-    group auth[Auth Layer]
-    service jwt(lib/auth.ts)
-    service apiGuard(lib/api-auth.ts)
-    
-    edge landing -> login
-    edge login -> authRoute
-    edge authRoute -> jwt
-    edge jwt -> prismaClient
-    
-    edge sidebar -> dashboard
-    edge dashboard -> oppRoute
-    edge opportunities -> oppRoute
-    edge investments -> invRoute
-    edge approve -> invRoute
-    edge audit -> auditRoute
-    
-    edge oppRoute -> apiGuard
-    edge invRoute -> apiGuard
-    edge auditRoute -> apiGuard
-    
-    edge apiGuard -> prismaClient
-    edge prismaClient -> postgres
+flowchart TB
+   subgraph public[Public Layer]
+      landing[app/page.tsx]
+      login[app/login/page.tsx]
+   end
+
+   subgraph authenticated[Authenticated Shell]
+      sidebar[components/ui/sidebar.tsx]
+      dashboard[app/dashboard/page.tsx]
+      opportunities[app/opportunities/page.tsx]
+      investments[app/investments/page.tsx]
+      approve[app/approve/page.tsx]
+      audit[app/audit/page.tsx]
+   end
+
+   subgraph api[API Layer]
+      authRoute[api/auth/route.ts]
+      oppRoute[api/opportunities/route.ts]
+      invRoute[api/investments/route.ts]
+      auditRoute[api/audit-logs/route.ts]
+   end
+
+   subgraph auth[Auth Layer]
+      jwt[lib/auth.ts]
+      apiGuard[lib/api-auth.ts]
+   end
+
+   subgraph data[Data Layer]
+      prismaClient[lib/db.ts]
+      postgres[(PostgreSQL 15)]
+   end
+
+   landing --> login
+   login --> authRoute
+   authRoute --> jwt
+   jwt --> prismaClient
+
+   sidebar --> dashboard
+   dashboard --> oppRoute
+   opportunities --> oppRoute
+   investments --> invRoute
+   approve --> invRoute
+   audit --> auditRoute
+
+   oppRoute --> apiGuard
+   invRoute --> apiGuard
+   auditRoute --> apiGuard
+
+   apiGuard --> prismaClient
+   prismaClient --> postgres
 ```
 
 ### Authentication & Authorization
@@ -401,3 +406,36 @@ npm run start  # Runs: next start
 
 - [AGENTS.md](./AGENTS.md) - Agent directives and memory architecture
 - [.opencode/skills/docs/SKILL.md](./.opencode/skills/docs/SKILL.md) - Documentation skill
+
+---
+
+## AI Assistant Usage
+
+OpenCode was used throughout development as a coding agent assistant.
+
+**Areas where OpenCode was used:**
+
+| Area | Usage |
+|------|-------|
+| Build troubleshooting | Diagnosed Tailwind CSS v4 PostCSS compatibility, resolved `@tailwindcss/postcss` plugin configuration |
+| Package imports | Identified `@hugeicons/react` export structure, corrected import syntax for `HugeiconsIcon` and `IconSvgElement` type |
+| Authentication redirect | Implemented root page split (server/client) with authenticated user redirect to `/dashboard` |
+| Documentation | Created `.opencode/skills/docs/SKILL.md`, refactored README.md with evidence-based approach and Mermaid architecture diagram |
+| Repository setup | Verified package versions, updated `knowledge/stack.md` with accurate dependency versions |
+
+**How OpenCode was used:**
+
+- Executed bash commands for package installation, build verification, and git operations
+- Read and edited source files directly
+- Used grep and glob to search codebase patterns
+- Verified changes by running `npm run build` after modifications
+- Committed and pushed changes incrementally
+
+**Agent memory system:**
+
+The repository uses an agent memory architecture defined in `AGENTS.md`:
+- `knowledge/` directory stores factual system state
+- `notes/` directory stores daily development trail
+- OpenCode reads these files at session start to restore context
+
+See `AGENTS.md` for the full memory architecture specification.
