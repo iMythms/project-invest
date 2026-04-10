@@ -48,9 +48,9 @@ function LandingPage() {
 
             <div className="mt-9 grid gap-5 border-t border-slate-200 pt-7 sm:grid-cols-3">
               <div>
-                <p className="text-2xl font-semibold tracking-tight text-slate-950">3 roles</p>
+                <p className="text-2xl font-semibold tracking-tight text-slate-950">4 roles</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Viewer, investor, and approver access within one governed system.
+                  Viewer, investor, investment manager, and approver access within one governed system.
                 </p>
               </div>
               <div>
@@ -214,8 +214,8 @@ function LandingPage() {
             <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-5 sm:col-span-2">
               <p className="text-sm font-medium text-white">Role-aware by default</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Viewer, investor, and approver experiences share one system while exposing only the controls each role should use.
-              </p>
+                  Viewer, investor, investment manager, and approver experiences share one system while exposing only the controls each role should use.
+                </p>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
-# Family Office Investment Portal
+# project invest
 
-Professional B2B investment portal for family offices with multi-user authentication, role-based access control, investment opportunity browsing, request workflows, and comprehensive audit logging.
+Professional B2B investment operations portal with multi-user authentication, role-based access control, opportunity creation and review workflows, investment request routing, and comprehensive audit logging.
 
 **Source of truth:** Repository inspection and validated runtime state.
 
@@ -26,6 +26,7 @@ flowchart TB
       investments[app/investments/page.tsx]
       approve[app/approve/page.tsx]
       audit[app/audit/page.tsx]
+      dialogs[shadcn Dialog workflows]
    end
 
    subgraph api[API Layer]
@@ -52,8 +53,8 @@ flowchart TB
 
    sidebar --> dashboard
    dashboard --> oppRoute
-   opportunities --> oppRoute
-   investments --> invRoute
+    opportunities --> oppRoute
+    investments --> invRoute
    approve --> invRoute
    audit --> auditRoute
 
@@ -76,24 +77,26 @@ Source of truth: `lib/auth.ts`, `lib/api-auth.ts`, `prisma/schema.prisma`.
 
 **Authorization Matrix:**
 
-| Endpoint | Viewer | Investor | Approver |
-|----------|:------:|:--------:|:--------:|
-| GET /api/opportunities | ✓ | ✓ | ✓ |
-| GET /api/opportunities/:id | ✓ | ✓ | ✓ |
-| POST /api/investments | ✗ | ✓ | ✓ |
-| GET /api/investments (own) | ✓ | ✓ | ✓ |
-| GET /api/investments (all) | ✗ | ✗ | ✓ |
-| PATCH /api/investments/:id/approve | ✗ | ✗ | ✓ |
-| PATCH /api/investments/:id/reject | ✗ | ✗ | ✓ |
-| GET /api/audit-logs | ✗ | ✗ | ✓ |
+| Endpoint | Viewer | Investor | Investment Manager | Approver |
+|----------|:------:|:--------:|:------------------:|:--------:|
+| GET /api/opportunities | ✓ | ✓ | ✓ | ✓ |
+| POST /api/opportunities | ✗ | ✗ | ✓ | ✗ |
+| GET /api/opportunities/:id | ✓ | ✓ | ✓ | ✓ |
+| POST /api/investments | ✗ | ✓ | ✗ | ✓ |
+| GET /api/investments (own) | ✓ | ✓ | ✗ | ✓ |
+| GET /api/investments (all) | ✗ | ✗ | ✗ | ✓ |
+| PATCH /api/investments/:id/approve | ✗ | ✗ | ✗ | ✓ |
+| PATCH /api/investments/:id/reject | ✗ | ✗ | ✗ | ✓ |
+| GET /api/audit-logs | ✗ | ✗ | ✗ | ✓ |
 
 **Role Capabilities:**
 
-| Role | View Opportunities | View Own Investments | View All Investments | Submit Investment | Approve/Reject | View Audit Logs |
-|------|:------------------:|:--------------------:|:--------------------:|:-----------------:|:--------------:|:---------------:|
-| Viewer | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
-| Investor | ✓ | ✓ | ✗ | ✓ | ✗ | ✗ |
-| Approver | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Role | View Opportunities | Create Opportunities | View Own Investments | View All Investments | Submit Investment | Approve/Reject | View Audit Logs |
+|------|:------------------:|:--------------------:|:--------------------:|:--------------------:|:-----------------:|:--------------:|:---------------:|
+| Viewer | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Investor | ✓ | ✗ | ✓ | ✗ | ✓ | ✗ | ✗ |
+| Investment Manager | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Approver | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ### Database Schema
 
@@ -108,7 +111,7 @@ Source of truth: `prisma/schema.prisma`.
 | AuditLog | id, user_id, action, entity_type, entity_id, details, ip_address, timestamp | user? |
 
 **Enums:**
-- UserRole: viewer, investor, approver
+- UserRole: viewer, investor, investment_manager, approver
 - OpportunityStatus: open, closed
 - RequestStatus: pending, approved, rejected
 
@@ -140,6 +143,7 @@ Source of truth: `prisma/schema.prisma` AuditLog model, `app/api/audit-logs/rout
 
 **Logged Actions:**
 - Login attempts (successful and failed)
+- Opportunity creation
 - Investment request submissions
 - Investment approvals and rejections
 
@@ -166,16 +170,19 @@ Source of truth: `package.json`, `knowledge/stack.md`.
 | Database | PostgreSQL | 15 |
 | ORM | Prisma | 5.22.0 |
 | Auth | JWT + bcrypt | 9.0.3 / 6.0.0 |
-| Charts | Chart.js + react-chartjs-2 | 4.5.1 / 5.3.1 |
+| UI System | shadcn/ui + Base UI | 4.2.0 / 1.3.0 |
+| Charts | Recharts + shadcn chart primitives | 3.8.0 / local wrappers |
 
 **Key Dependencies:**
 
 | Package | Purpose |
 |---------|---------|
+| shadcn | Registry and generated UI components |
 | @hugeicons/react | Icon system |
 | @base-ui/react | UI primitives |
 | class-variance-authority | Component variants |
 | clsx + tailwind-merge | Class utilities |
+| recharts | Dashboard and analytical chart rendering |
 
 ### Configuration
 
@@ -208,8 +215,8 @@ project-invest/
 │   ├── approve/page.tsx
 │   └── audit/page.tsx
 ├── components/
-│   ├── ui/button.tsx, sidebar.tsx, card.tsx, badge.tsx, table.tsx, input.tsx, etc.
-│   ├── navbar.tsx, status-pill.tsx, dashboard-charts.tsx
+│   ├── ui/button.tsx, sidebar.tsx, card.tsx, badge.tsx, table.tsx, input.tsx, select.tsx, textarea.tsx, dialog.tsx, chart.tsx, etc.
+│   ├── navbar.tsx, page-header.tsx, status-pill.tsx, dashboard-charts.tsx
 ├── lib/
 │   ├── db.ts (Prisma client)
 │   ├── auth.ts (JWT, bcrypt)
@@ -226,7 +233,7 @@ project-invest/
 
 ### Setup Instructions
 
-Source of truth: validated runtime steps from compressed conversation section b1.
+Source of truth: `package.json`, `prisma/schema.prisma`, and validated local runtime commands.
 
 **Prerequisites:**
 - Node.js 18+
@@ -281,7 +288,7 @@ Source of truth: validated runtime steps from compressed conversation section b1
 
 ### Test Accounts
 
-Source of truth: seed data from compressed conversation section b1.
+Source of truth: `prisma/seed.ts`.
 
 After seeding, login with these accounts (password: `password123`):
 
@@ -289,6 +296,7 @@ After seeding, login with these accounts (password: `password123`):
 |-------|------|
 | viewer@test.com | Viewer |
 | investor@test.com | Investor |
+| manager@test.com | Investment Manager |
 | approver@test.com | Approver |
 
 ### API Request Formats
@@ -323,6 +331,21 @@ Content-Type: application/json
 }
 ```
 
+**Opportunity Creation:**
+
+```bash
+POST /api/opportunities
+Authorization: Bearer <manager_token>
+Content-Type: application/json
+
+{
+  "name": "Late Stage Credit Fund",
+  "description": "Senior secured credit strategy focused on asset-backed downside protection.",
+  "minimumInvestment": 100000,
+  "status": "open"
+}
+```
+
 **Approve/Reject:**
 
 ```bash
@@ -341,10 +364,11 @@ Source of truth: `DESIGN.md`.
 
 **Visual Theme:**
 - Light-first, institutional aesthetic
-- Left sidebar shell for authenticated pages
-- Deep blue (`trust-700`) as primary accent
-- Muted semantic colors for status
-- Tables and workflow views drive product identity
+- shadcn sidebar shell for authenticated pages
+- `project invest` branding in the authenticated workspace
+- fully rounded button treatment across the app
+- muted semantic colors for status
+- shadcn cards, tables, dialogs, and Recharts-based chart blocks drive product identity
 
 **Color Palette:**
 
@@ -399,7 +423,8 @@ npm run start  # Runs: next start
 - [JWT Introduction](https://jwt.io/introduction) - Token authentication
 - [bcrypt npm](https://www.npmjs.com/package/bcrypt) - Password hashing
 - [Tailwind CSS v4](https://tailwindcss.com/docs) - Styling
-- [Chart.js](https://www.chartjs.org/docs/) - Data visualization
+- [shadcn/ui](https://ui.shadcn.com/) - UI component registry and patterns
+- [Recharts](https://recharts.org/en-US) - Chart rendering library
 - [Mermaid Architecture Syntax](https://mermaid.js.org/syntax/architecture) - Diagram format
 
 ### Project-Specific
@@ -421,7 +446,9 @@ OpenCode was used throughout development as a coding agent assistant.
 | Package imports | Identified `@hugeicons/react` export structure, corrected import syntax for `HugeiconsIcon` and `IconSvgElement` type |
 | Authentication redirect | Implemented root page split (server/client) with authenticated user redirect to `/dashboard` |
 | Documentation | Created `.opencode/skills/docs/SKILL.md`, refactored README.md with evidence-based approach and Mermaid architecture diagram |
-| Repository setup | Verified package versions, updated `knowledge/stack.md` with accurate dependency versions |
+| UI refactor | Installed and applied shadcn sidebar, dialog, table, card, select, textarea, and chart primitives |
+| Role expansion | Added `investment_manager` role, API-backed opportunity creation, and dialog-based opportunity workflows |
+| Repository setup | Verified package versions, updated knowledge files and seed data with accurate dependency and role state |
 
 **How OpenCode was used:**
 

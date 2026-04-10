@@ -1,11 +1,41 @@
 'use client'
 
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { usePathname } from 'next/navigation'
-import { StatusBadge } from '@/components/ui'
-import { AppIcon, IconTile } from '@/components/icons'
+import { AppIcon } from '@/components/icons'
+import { StatusPill } from '@/components/status-pill'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from '@/components/ui/breadcrumb'
+import { Separator } from '@/components/ui/separator'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
 import {
   Audit01Icon,
   Briefcase01Icon,
@@ -14,37 +44,34 @@ import {
   Invoice03Icon,
   Logout03Icon,
 } from '@hugeicons/core-free-icons'
+import { cn } from '@/lib/utils'
 
 const navItems = [
   {
     href: '/dashboard',
     label: 'Dashboard',
-    description: 'Overview and priorities',
     icon: DashboardSquare01Icon,
   },
   {
     href: '/opportunities',
     label: 'Opportunities',
-    description: 'Open opportunities and intake',
     icon: Briefcase01Icon,
   },
   {
     href: '/investments',
     label: 'Investments',
-    description: 'Requests and portfolio activity',
     icon: ChartLineData01Icon,
+    roles: ['viewer', 'investor', 'approver'],
   },
   {
     href: '/approve',
     label: 'Approvals',
-    description: 'Decision queue',
     icon: Invoice03Icon,
     roles: ['approver'],
   },
   {
     href: '/audit',
     label: 'Audit Log',
-    description: 'System history',
     icon: Audit01Icon,
     roles: ['approver'],
   },
@@ -86,11 +113,6 @@ const sectionMeta = [
 export function Navbar({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth()
   const pathname = usePathname()
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
-
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [pathname])
 
   if (!user) {
     return <>{children}</>
@@ -103,143 +125,128 @@ export function Navbar({ children }: { children: ReactNode }) {
     }
 
   const visibleItems = navItems.filter((item) => !item.roles || item.roles.includes(user.role))
+  const initials = user.email.slice(0, 2).toUpperCase()
 
   return (
-    <div className="min-h-screen bg-slate-50 lg:flex">
-      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/92 px-4 py-3 backdrop-blur lg:hidden">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <IconTile icon={DashboardSquare01Icon} tone="brand" size={16} />
+    <SidebarProvider>
+      <Sidebar collapsible="offcanvas" variant="inset" className="border-r border-sidebar-border/70">
+        <SidebarHeader className="gap-1 px-3 py-3">
+          <div className="flex items-center gap-3 px-2 py-1">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-2xl bg-sidebar-primary text-sidebar-primary-foreground">
+              <AppIcon icon={DashboardSquare01Icon} size={18} />
+            </div>
             <div className="min-w-0">
-              <p className="truncate text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                Family office portal
-              </p>
-              <p className="truncate text-sm font-semibold text-slate-900">{section.label}</p>
+              <p className="truncate text-sm font-semibold text-sidebar-foreground">project invest</p>
+              <p className="truncate text-xs text-sidebar-foreground/60">investment operations</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setMobileNavOpen((current) => !current)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700"
-            aria-label="Toggle navigation"
-            aria-expanded={mobileNavOpen}
-          >
-            <span className="flex flex-col gap-1.5">
-              <span className="block h-0.5 w-4 rounded-full bg-current" />
-              <span className="block h-0.5 w-4 rounded-full bg-current" />
-              <span className="block h-0.5 w-4 rounded-full bg-current" />
-            </span>
-          </button>
-        </div>
-      </div>
+        </SidebarHeader>
 
-      {mobileNavOpen ? (
-        <button
-          type="button"
-          aria-label="Close navigation overlay"
-          onClick={() => setMobileNavOpen(false)}
-          className="fixed inset-0 z-30 bg-slate-950/20 lg:hidden"
-        />
-      ) : null}
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel className="px-2 pb-2 text-[0.7rem] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/45">
+              Navigation
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleItems.map((item) => {
+                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[272px] max-w-[86vw] flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:w-[248px] lg:translate-x-0 ${
-          mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="border-b border-slate-200 px-4 py-4">
-          <div className="flex items-center gap-3">
-            <IconTile icon={DashboardSquare01Icon} tone="brand" size={16} />
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-                Family office portal
-              </p>
-              <h1 className="mt-0.5 text-base font-semibold tracking-tight text-slate-900">Investment operations</h1>
-            </div>
-          </div>
-          <p className="mt-3 text-[13px] leading-5 text-slate-500">
-            Capital workflow, approvals, and oversight.
-          </p>
-        </div>
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        size="default"
+                        isActive={active}
+                        tooltip={item.label}
+                        className={cn(
+                          'h-11 gap-3 rounded-2xl px-2.5 py-2 text-[15px] font-medium transition-colors',
+                          active
+                            ? 'bg-sidebar-accent/80 text-sidebar-accent-foreground'
+                            : 'text-sidebar-foreground/78 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground'
+                        )}
+                        render={<Link href={item.href} />}
+                      >
+                        <span
+                          className={cn(
+                            'flex size-7 shrink-0 items-center justify-center rounded-xl border border-sidebar-border/70 bg-background text-sidebar-foreground/80',
+                            active && 'border-transparent bg-background text-sidebar-foreground'
+                          )}
+                        >
+                          <AppIcon icon={item.icon} size={17} />
+                        </span>
+                        <span className="truncate leading-none">{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-        <div className="px-4 pt-4">
-          <div className="surface-subtle flex items-center justify-between px-3 py-2.5">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Workspace mode</p>
-              <p className="mt-0.5 text-sm font-medium text-slate-900">Approver-first shell</p>
-            </div>
-            <StatusBadge label={user.role} tone="brand" />
-          </div>
-        </div>
-
-        <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-4">
-          {visibleItems.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-2xl border px-3 py-2.5 text-sm transition ${
-                  active
-                    ? 'border-slate-200 bg-slate-50 text-slate-900'
-                    : 'border-transparent bg-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <span
-                    className={`mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-xl ${
-                      active ? 'bg-white text-slate-900 ring-1 ring-slate-200' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <AppIcon icon={item.icon} size={16} />
-                  </span>
-                  <div>
-                    <p className="font-medium">{item.label}</p>
-                    <p className={`mt-0.5 text-[11px] leading-4 ${active ? 'text-slate-500' : 'text-slate-500'}`}>
-                      {item.description}
-                    </p>
+        <SidebarFooter className="px-3 pb-3">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <SidebarMenuButton size="default" className="h-11 rounded-2xl px-2.5 py-2">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-foreground">
+                        {initials}
+                      </span>
+                      <span className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                        <span className="truncate font-medium">project invest</span>
+                        <span className="truncate text-xs text-sidebar-foreground/60">{user.email}</span>
+                      </span>
+                    </SidebarMenuButton>
+                  }
+                />
+                <DropdownMenuContent side="top" align="end" className="min-w-56 rounded-3xl">
+                  <div className="px-2 py-1.5">
+                    <p className="text-sm font-medium">{user.email}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Authenticated workspace session</p>
                   </div>
-                </div>
-              </Link>
-            )
-          })}
-        </nav>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5">
+                    <StatusPill value={user.role} />
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <AppIcon icon={Logout03Icon} size={16} />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
 
-        <div className="border-t border-slate-200 px-4 py-4">
-          <div className="surface-subtle flex items-center justify-between gap-3 px-3 py-2.5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-900">{user.email}</p>
-              <p className="mt-1 text-[11px] text-slate-500">Authenticated workspace session</p>
-            </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-              aria-label="Sign out"
-            >
-              <AppIcon icon={Logout03Icon} size={16} />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 hidden border-b border-slate-200 bg-slate-50/85 backdrop-blur lg:block">
-          <div className="flex items-center justify-between gap-3 px-8 py-3">
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">{section.label}</p>
-              <p className="mt-0.5 text-sm text-slate-600">{section.subtitle}</p>
-            </div>
-            <div className="flex items-center gap-3 text-sm text-slate-500">
-              <span>Role-aware controls are applied automatically.</span>
-              <StatusBadge label={user.role} tone="brand" />
+      <SidebarInset className="bg-background">
+        <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
+          <div className="flex h-14 items-center gap-3 px-4 md:px-6">
+            <SidebarTrigger className="md:hidden" />
+            <Separator orientation="vertical" className="mr-1 hidden h-4 md:block" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:inline-flex">
+                  <span className="text-muted-foreground">project invest</span>
+                </BreadcrumbItem>
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{section.label}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="ml-auto flex items-center gap-3">
+              <p className="hidden text-sm text-muted-foreground lg:block">{section.subtitle}</p>
+              <StatusPill value={user.role} />
             </div>
           </div>
         </header>
 
-        <main className="px-4 py-5 sm:px-6 lg:px-8 lg:py-6">{children}</main>
-      </div>
-    </div>
+        <main className="flex-1 px-4 py-4 md:px-6 md:py-6">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

@@ -4,11 +4,34 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChartBarLineIcon, ChartRingIcon, Invoice03Icon } from '@hugeicons/core-free-icons'
-import { StatusDoughnutChart, VolumeBarChart } from '@/components/dashboard-charts'
-import { IconTile } from '@/components/icons'
-import { EmptyState, LoadingState, MetricCard, PageHeader, SectionCard, StatusBadge } from '@/components/ui'
+import {
+  ApprovalRateRadialChart,
+  RequestCountLineChart,
+  StatusDoughnutChart,
+  VolumeBarChart,
+} from '@/components/dashboard-charts'
+import { AppIcon } from '@/components/icons'
+import { PageHeader } from '@/components/page-header'
+import { StatusPill } from '@/components/status-pill'
 import { useAuth } from '@/lib/auth-context'
-import { formatCurrency, formatDate, formatLabel } from '@/lib/format'
+import { formatCurrency, formatDate } from '@/lib/format'
+import { buttonVariants } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 interface Investment {
   id: string
@@ -26,6 +49,11 @@ interface Investment {
   }
 }
 
+const trendFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+})
+
 export default function InvestmentsPage() {
   const { user, token, loading } = useAuth()
   const [investments, setInvestments] = useState<Investment[]>([])
@@ -39,22 +67,24 @@ export default function InvestmentsPage() {
       return
     }
 
+    if (user?.role === 'investment_manager') {
+      router.push('/opportunities')
+      return
+    }
+
     if (user && token) {
-      fetchInvestments()
+      void fetchInvestments()
     }
   }, [user, token, loading, router])
 
   const fetchInvestments = async () => {
     try {
       const response = await fetch('/api/investments', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setInvestments(data)
+        setInvestments(await response.json())
       }
     } catch (error) {
       console.error('Failed to fetch investments:', error)
@@ -79,11 +109,6 @@ export default function InvestmentsPage() {
     0
   )
 
-  const statusChart = {
-    labels: ['Pending', 'Approved', 'Rejected'],
-    values: [pendingCount, approvedCount, rejectedCount],
-  }
-
   const volumeByStatus = useMemo(() => {
     const sums = new Map<string, number>([
       ['Pending', 0],
@@ -92,148 +117,250 @@ export default function InvestmentsPage() {
     ])
 
     filteredInvestments.forEach((investment) => {
-      const key = formatLabel(investment.status)
+      const key = investment.status.charAt(0).toUpperCase() + investment.status.slice(1)
       sums.set(key, (sums.get(key) ?? 0) + Number.parseFloat(investment.amount))
     })
 
+    return { labels: Array.from(sums.keys()), values: Array.from(sums.values()) }
+  }, [filteredInvestments])
+
+  const requestTrend = useMemo(() => {
+    const grouped = new Map<string, { label: string; count: number }>()
+
+    filteredInvestments.forEach((investment) => {
+      const date = new Date(investment.submitted_at)
+      const key = date.toISOString().slice(0, 10)
+      const current = grouped.get(key) ?? { label: trendFormatter.format(date), count: 0 }
+      current.count += 1
+      grouped.set(key, current)
+    })
+
+    const timeline = Array.from(grouped.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .slice(-8)
+      .map(([, value]) => value)
+
+    if (timeline.length === 0) {
+      return { labels: ['No data'], values: [0] }
+    }
+
     return {
-      labels: Array.from(sums.keys()),
-      values: Array.from(sums.values()),
+      labels: timeline.map((item) => item.label),
+      values: timeline.map((item) => item.count),
     }
   }, [filteredInvestments])
 
+  const opportunityAllocation = useMemo(() => {
+    const grouped = new Map<string, number>()
+
+    filteredInvestments.forEach((investment) => {
+      const current = grouped.get(investment.opportunity.name) ?? 0
+      grouped.set(investment.opportunity.name, current + Number.parseFloat(investment.amount))
+    })
+
+    const ranked = Array.from(grouped.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 5)
+
+    if (ranked.length === 0) {
+      return { labels: ['No data'], values: [0] }
+    }
+
+    return {
+      labels: ranked.map(([label]) => label),
+      values: ranked.map(([, value]) => value),
+    }
+  }, [filteredInvestments])
+
+  const metrics = [
+    {
+      label: 'Visible requests',
+      value: String(filteredInvestments.length),
+      description: 'Requests under the selected filter.',
+      icon: Invoice03Icon,
+    },
+    {
+      label: 'Pending',
+      value: String(pendingCount),
+      description: 'Requests still waiting for a final review.',
+      icon: ChartRingIcon,
+    },
+    {
+      label: 'Visible volume',
+      value: formatCurrency(totalVisibleVolume),
+      description: `Approved requests: ${approvedCount}`,
+      icon: ChartBarLineIcon,
+    },
+  ]
+
   if (loading || !user) {
-    return <LoadingState label="Loading investments..." />
+    return null
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         eyebrow={user.role === 'approver' ? 'Request oversight' : 'Investment history'}
         title={user.role === 'approver' ? 'Investments' : 'My investments'}
         description={
           user.role === 'approver'
             ? 'Review the full request ledger, monitor pending approvals, and inspect final outcomes.'
-            : 'Track your submitted requests, current statuses, and review timing in one operating ledger.'
+            : 'Track your submitted requests and outcomes in one ledger.'
         }
         actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm text-slate-500" htmlFor="statusFilter">
-              Status filter
-            </label>
-            <select
-              id="statusFilter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="select-field min-w-[180px]"
-            >
-              <option value="all">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? 'all')}>
+            <SelectTrigger className="min-w-[180px] rounded-full">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
         }
       />
 
       <section className="grid gap-4 md:grid-cols-3">
-        <MetricCard
-          label="Visible requests"
-          value={String(filteredInvestments.length)}
-          description="Requests currently returned under the selected filter."
-          tone="brand"
-          icon={<IconTile icon={Invoice03Icon} tone="brand" size={16} />}
-        />
-        <MetricCard
-          label="Pending"
-          value={String(pendingCount)}
-          description="Requests still waiting for a final review outcome."
-          tone="warning"
-          icon={<IconTile icon={ChartRingIcon} tone="warning" size={16} />}
-        />
-        <MetricCard
-          label="Visible volume"
-          value={formatCurrency(totalVisibleVolume)}
-          description={`Approved requests: ${approvedCount}`}
-          icon={<IconTile icon={ChartBarLineIcon} tone="default" size={16} />}
-        />
+        {metrics.map((metric) => (
+          <Card key={metric.label}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardDescription>{metric.label}</CardDescription>
+              <div className="flex size-8 items-center justify-center rounded-2xl bg-muted">
+                <AppIcon icon={metric.icon} size={16} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold tracking-tight">{metric.value}</div>
+              <p className="mt-1 text-sm text-muted-foreground">{metric.description}</p>
+            </CardContent>
+          </Card>
+        ))}
       </section>
 
-      {dataLoading ? (
-        <LoadingState label="Loading investments..." />
-      ) : filteredInvestments.length === 0 ? (
-        <EmptyState
-          title="No investment requests found"
-          description="Adjust the current filter or create a new investment request from an open opportunity."
-          action={
-            (user.role === 'investor' || user.role === 'approver') && (
-              <Link href="/opportunities" className="btn-primary">
+      {dataLoading ? null : filteredInvestments.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <p className="text-sm text-muted-foreground">No investment requests match the current filter.</p>
+            {(user.role === 'investor' || user.role === 'approver') && (
+              <Link href="/opportunities" className={buttonVariants({ className: 'mt-4' })}>
                 Review opportunities
               </Link>
-            )
-          }
-        />
+            )}
+          </CardContent>
+        </Card>
       ) : (
         <>
-          <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <SectionCard
-              title="Volume by status"
-              description="The selected ledger filter still keeps status totals and volume legible."
-            >
-              <VolumeBarChart labels={volumeByStatus.labels} values={volumeByStatus.values} />
-            </SectionCard>
+          <section className="grid gap-4 xl:grid-cols-2">
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle>Volume by status</CardTitle>
+                <CardDescription>Capital volume grouped by the selected ledger filter.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <VolumeBarChart labels={volumeByStatus.labels} values={volumeByStatus.values} />
+              </CardContent>
+            </Card>
 
-            <SectionCard title="Request mix" description="Status split across all visible requests in the workspace.">
-              <StatusDoughnutChart labels={statusChart.labels} values={statusChart.values} />
-            </SectionCard>
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle>Request cadence</CardTitle>
+                <CardDescription>How many requests entered the ledger over each visible period.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <RequestCountLineChart labels={requestTrend.labels} values={requestTrend.values} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle>Allocation by opportunity</CardTitle>
+                <CardDescription>Top opportunities ranked by visible requested capital.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <VolumeBarChart
+                  labels={opportunityAllocation.labels}
+                  values={opportunityAllocation.values}
+                  label="Requested capital"
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle>Request mix</CardTitle>
+                <CardDescription>Status distribution across the visible request set.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <StatusDoughnutChart
+                  labels={['Pending', 'Approved', 'Rejected']}
+                  values={[pendingCount, approvedCount, rejectedCount]}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle>Approval rate</CardTitle>
+                <CardDescription>Reviewed requests approved within the current ledger view.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <ApprovalRateRadialChart approved={approvedCount} rejected={rejectedCount} />
+              </CardContent>
+            </Card>
           </section>
 
-          <div className="table-shell">
-            <div className="table-container">
-              <table className="data-table min-w-[980px]">
-                <thead>
-                  <tr>
-                    {user.role === 'approver' && <th>Requestor</th>}
-                    <th>Opportunity</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Submitted</th>
-                    <th>Reviewed</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInvestments.map((inv) => (
-                    <tr key={inv.id}>
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Investment ledger</CardTitle>
+              <CardDescription>Shadcn table layout for requests, outcomes, notes, and review timing.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {user.role === 'approver' && <TableHead>Requestor</TableHead>}
+                    <TableHead>Opportunity</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>Reviewed</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInvestments.map((investment) => (
+                    <TableRow key={investment.id}>
                       {user.role === 'approver' && (
-                        <td>
-                          <div>
-                            <p className="font-medium text-slate-900">{inv.user?.name || 'Unknown user'}</p>
-                            <p className="mt-1 text-slate-500">{inv.user?.email || '-'}</p>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-medium">{investment.user?.name || 'Unknown user'}</p>
+                            <p className="text-xs text-muted-foreground">{investment.user?.email || '-'}</p>
                           </div>
-                        </td>
+                        </TableCell>
                       )}
-                      <td>
-                        <div>
-                          <p className="font-medium text-slate-900">{inv.opportunity.name}</p>
-                          <p className="mono-text mt-1">{inv.id}</p>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p className="font-medium">{investment.opportunity.name}</p>
+                          <p className="text-xs text-muted-foreground">{investment.id}</p>
                         </div>
-                      </td>
-                      <td className="font-medium text-slate-900">{formatCurrency(inv.amount)}</td>
-                      <td>
-                        <StatusBadge label={formatLabel(inv.status)} />
-                      </td>
-                      <td>{formatDate(inv.submitted_at)}</td>
-                      <td>{formatDate(inv.reviewed_at)}</td>
-                      <td>
-                        <p className="max-w-xs leading-6 text-slate-500">{inv.notes || '-'}</p>
-                      </td>
-                    </tr>
+                      </TableCell>
+                      <TableCell>{formatCurrency(investment.amount)}</TableCell>
+                      <TableCell>
+                        <StatusPill value={investment.status} />
+                      </TableCell>
+                      <TableCell>{formatDate(investment.submitted_at)}</TableCell>
+                      <TableCell>{formatDate(investment.reviewed_at)}</TableCell>
+                      <TableCell className="max-w-xs whitespace-normal text-muted-foreground">
+                        {investment.notes || '-'}
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

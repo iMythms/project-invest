@@ -1,10 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAuth } from '@/lib/auth-context'
 import { useRouter } from 'next/navigation'
-import { EmptyState, LoadingState, MetricCard, PageHeader, SectionCard, StatusBadge } from '@/components/ui'
-import { formatCurrency, formatDate, formatLabel } from '@/lib/format'
+import { PageHeader } from '@/components/page-header'
+import { StatusPill } from '@/components/status-pill'
+import { useAuth } from '@/lib/auth-context'
+import { formatCurrency, formatDate } from '@/lib/format'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 
 interface Investment {
   id: string
@@ -40,16 +53,14 @@ export default function ApprovePage() {
     }
 
     if (user && token) {
-      fetchInvestments()
+      void fetchInvestments()
     }
   }, [user, token, loading, router])
 
   const fetchInvestments = async () => {
     try {
       const response = await fetch('/api/investments?status=pending', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.ok) {
@@ -69,11 +80,11 @@ export default function ApprovePage() {
     }
   }
 
-  const handleApprove = async (id: string) => {
+  const handleDecision = async (id: string, decision: 'approve' | 'reject') => {
     setSubmittingId(id)
 
     try {
-      const response = await fetch(`/api/investments/${id}/approve`, {
+      const response = await fetch(`/api/investments/${id}/${decision}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -83,196 +94,184 @@ export default function ApprovePage() {
       })
 
       if (response.ok) {
-        fetchInvestments()
+        await fetchInvestments()
       }
     } catch (error) {
-      console.error('Failed to approve:', error)
+      console.error(`Failed to ${decision}:`, error)
     } finally {
       setSubmittingId(null)
     }
   }
 
-  const handleReject = async (id: string) => {
-    setSubmittingId(id)
-
-    try {
-      const response = await fetch(`/api/investments/${id}/reject`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ notes: notes[id] || null }),
-      })
-
-      if (response.ok) {
-        fetchInvestments()
-      }
-    } catch (error) {
-      console.error('Failed to reject:', error)
-    } finally {
-      setSubmittingId(null)
-    }
-  }
-
-  if (loading || !user) {
-    return <LoadingState label="Loading approvals..." />
-  }
-
-  if (user.role !== 'approver') {
+  if (loading || !user || user.role !== 'approver') {
     return null
   }
 
   const activeInvestment = investments.find((investment) => investment.id === activeId) ?? investments[0] ?? null
+  const metrics = [
+    {
+      label: 'Pending requests',
+      value: String(investments.length),
+      description: 'Requests awaiting a decision.',
+    },
+    {
+      label: 'Visible requestors',
+      value: String(new Set(investments.map((investment) => investment.user.email)).size),
+      description: 'Distinct requestors represented in queue.',
+    },
+    {
+      label: 'Pending volume',
+      value: formatCurrency(
+        investments.reduce((total, investment) => total + Number.parseFloat(investment.amount), 0)
+      ),
+      description: 'Aggregate capital awaiting review.',
+    },
+  ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Decision queue"
         title="Approvals"
-        description="Review pending requests, capture approval notes, and complete decisions with full request context visible."
+        description="Review pending requests, capture rationale, and complete approval decisions from a cleaner split layout."
       />
 
       <section className="grid gap-4 md:grid-cols-3">
-        <MetricCard
-          label="Pending requests"
-          value={String(investments.length)}
-          description="Requests awaiting an approval decision."
-          tone="warning"
-        />
-        <MetricCard
-          label="Visible requestors"
-          value={String(new Set(investments.map((investment) => investment.user.email)).size)}
-          description="Distinct requestors currently represented in the queue."
-          tone="brand"
-        />
-        <MetricCard
-          label="Pending volume"
-          value={formatCurrency(
-            investments.reduce((total, investment) => total + Number.parseFloat(investment.amount), 0)
-          )}
-          description="Aggregate capital volume awaiting review."
-        />
+        {metrics.map((metric) => (
+          <Card key={metric.label}>
+            <CardHeader className="pb-2">
+              <CardDescription>{metric.label}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold tracking-tight">{metric.value}</div>
+              <p className="mt-1 text-sm text-muted-foreground">{metric.description}</p>
+            </CardContent>
+          </Card>
+        ))}
       </section>
 
-      {dataLoading ? (
-        <LoadingState label="Loading pending requests..." />
-      ) : investments.length === 0 || !activeInvestment ? (
-        <EmptyState
-          title="No pending requests"
-          description="The approval queue is currently clear. New requests will appear here as soon as they are submitted."
-        />
+      {dataLoading ? null : investments.length === 0 || !activeInvestment ? (
+        <Card>
+          <CardContent className="p-10 text-center text-sm text-muted-foreground">
+            No pending requests are currently waiting in the queue.
+          </CardContent>
+        </Card>
       ) : (
-        <section className="grid gap-6 xl:grid-cols-[1.05fr_1fr]">
-          <div className="table-shell">
-            <div className="table-container">
-              <table className="data-table min-w-[760px] xl:min-w-0">
-                <thead>
-                  <tr>
-                    <th>Requestor</th>
-                    <th>Opportunity</th>
-                    <th>Amount</th>
-                    <th>Submitted</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {investments.map((inv) => {
-                    const active = inv.id === activeInvestment.id
+        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Pending queue</CardTitle>
+              <CardDescription>Compact table first, detail panel second.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Requestor</TableHead>
+                    <TableHead>Opportunity</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {investments.map((investment) => {
+                    const active = investment.id === activeInvestment.id
 
                     return (
-                      <tr
-                        key={inv.id}
-                        className={active ? 'bg-blue-50/70' : undefined}
-                        onClick={() => setActiveId(inv.id)}
+                      <TableRow
+                        key={investment.id}
+                        data-state={active ? 'selected' : undefined}
+                        className={cn('cursor-pointer', active && 'bg-muted')}
+                        onClick={() => setActiveId(investment.id)}
                       >
-                        <td>
-                          <div>
-                            <p className="font-medium text-slate-900">{inv.user.name}</p>
-                            <p className="mt-1 text-slate-500">{inv.user.email}</p>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-medium">{investment.user.name}</p>
+                            <p className="text-xs text-muted-foreground">{investment.user.email}</p>
                           </div>
-                        </td>
-                        <td>
-                          <p className="font-medium text-slate-900">{inv.opportunity.name}</p>
-                          <p className="mono-text mt-1">{inv.id}</p>
-                        </td>
-                        <td className="font-medium text-slate-900">{formatCurrency(inv.amount)}</td>
-                        <td>{formatDate(inv.submitted_at)}</td>
-                        <td>
-                          <StatusBadge label={formatLabel('pending')} />
-                        </td>
-                      </tr>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-medium">{investment.opportunity.name}</p>
+                            <p className="text-xs text-muted-foreground">{investment.id}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatCurrency(investment.amount)}</TableCell>
+                        <TableCell>{formatDate(investment.submitted_at)}</TableCell>
+                        <TableCell>
+                          <StatusPill value="pending" />
+                        </TableCell>
+                      </TableRow>
                     )
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
 
-          <SectionCard
-            title="Selected request"
-            description="Capture rationale before finalizing the approval outcome."
-          >
-            <div className="space-y-6">
-              <div className="surface-subtle p-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-xl font-semibold text-slate-900">{activeInvestment.opportunity.name}</h2>
-                  <StatusBadge label={formatLabel('pending')} tone="warning" />
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Selected request</CardTitle>
+              <CardDescription>Capture rationale before finalizing the approval outcome.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5 pt-4">
+              <div className="rounded-3xl border p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold">{activeInvestment.opportunity.name}</h2>
+                  <StatusPill value="pending" />
                 </div>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
-                    <p className="text-xs font-medium text-slate-500">Requestor</p>
-                    <p className="mt-2 text-sm font-medium text-slate-900">{activeInvestment.user.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{activeInvestment.user.email}</p>
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Requestor</p>
+                    <p className="mt-2 font-medium">{activeInvestment.user.name}</p>
+                    <p className="text-sm text-muted-foreground">{activeInvestment.user.email}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-slate-500">Requested amount</p>
-                    <p className="mt-2 text-lg font-semibold text-slate-900">
-                      {formatCurrency(activeInvestment.amount)}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Submitted {formatDate(activeInvestment.submitted_at)}
-                    </p>
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Requested amount</p>
+                    <p className="mt-2 text-lg font-semibold">{formatCurrency(activeInvestment.amount)}</p>
+                    <p className="text-sm text-muted-foreground">Submitted {formatDate(activeInvestment.submitted_at)}</p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="approval-notes" className="block text-sm font-medium text-slate-700">
+                <label htmlFor="approval-notes" className="text-sm font-medium">
                   Review notes
                 </label>
-                <textarea
+                <Textarea
                   id="approval-notes"
                   value={notes[activeInvestment.id] || ''}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setNotes({
                       ...notes,
-                      [activeInvestment.id]: e.target.value,
+                      [activeInvestment.id]: event.target.value,
                     })
                   }
-                  placeholder="Document the reasoning or follow-up conditions for this decision."
-                  className="textarea-field"
+                  placeholder="Document the rationale or conditions for this decision."
+                  className="min-h-[140px] rounded-3xl"
                 />
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
-                <button
-                  onClick={() => handleApprove(activeInvestment.id)}
+                <Button
+                  className="flex-1"
+                  onClick={() => handleDecision(activeInvestment.id, 'approve')}
                   disabled={submittingId === activeInvestment.id}
-                  className="btn-primary flex-1"
                 >
                   {submittingId === activeInvestment.id ? 'Processing...' : 'Approve request'}
-                </button>
-                <button
-                  onClick={() => handleReject(activeInvestment.id)}
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => handleDecision(activeInvestment.id, 'reject')}
                   disabled={submittingId === activeInvestment.id}
-                  className="btn-destructive flex-1"
                 >
                   {submittingId === activeInvestment.id ? 'Processing...' : 'Reject request'}
-                </button>
+                </Button>
               </div>
-            </div>
-          </SectionCard>
+            </CardContent>
+          </Card>
         </section>
       )}
     </div>

@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LoadingState, PageHeader, StatusBadge } from '@/components/ui'
+import { PageHeader } from '@/components/page-header'
+import { StatusPill } from '@/components/status-pill'
 import { useAuth } from '@/lib/auth-context'
-import { formatCurrency, formatLabel } from '@/lib/format'
+import { formatCurrency } from '@/lib/format'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 
 interface Opportunity {
   id: string
@@ -31,7 +35,7 @@ export default function NewInvestmentClientPage({ opportunityId }: NewInvestment
     }
 
     if (opportunityId && token) {
-      fetchOpportunity()
+      void fetchOpportunity()
       return
     }
 
@@ -43,9 +47,7 @@ export default function NewInvestmentClientPage({ opportunityId }: NewInvestment
   const fetchOpportunity = async () => {
     try {
       const response = await fetch(`/api/opportunities/${opportunityId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.ok) {
@@ -62,8 +64,8 @@ export default function NewInvestmentClientPage({ opportunityId }: NewInvestment
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     setError('')
     setSubmitting(true)
 
@@ -74,10 +76,7 @@ export default function NewInvestmentClientPage({ opportunityId }: NewInvestment
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          opportunityId,
-          amount,
-        }),
+        body: JSON.stringify({ opportunityId, amount }),
       })
 
       if (!response.ok) {
@@ -95,95 +94,88 @@ export default function NewInvestmentClientPage({ opportunityId }: NewInvestment
   }
 
   if (loading || !user) {
-    return <LoadingState label="Loading request form..." />
-  }
-
-  if (!opportunity) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-8">
-        <PageHeader
-          eyebrow="Capital request"
-          title="Submit investment request"
-          description="Confirm the opportunity and amount before routing this request into the approval workflow."
-        />
-
-        <div className="surface-card p-6 sm:p-8">
-          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error || 'Loading opportunity...'}
-          </div>
-        </div>
-      </div>
-    )
+    return null
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         eyebrow="Capital request"
         title="Submit investment request"
-        description="Confirm the opportunity and amount before routing this request into the approval workflow."
+        description="Confirm the selected opportunity and requested amount before routing the request into approval."
       />
 
-      <div className="grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
-        <aside className="surface-card p-6">
-          <p className="text-sm font-medium text-slate-500">Selected opportunity</p>
-          <h2 className="mt-3 text-xl font-semibold text-slate-900">{opportunity.name}</h2>
-          <div className="mt-5 space-y-4 text-sm text-slate-600">
-            <div className="surface-subtle p-4">
-              <p className="text-xs font-medium text-slate-500">Minimum commitment</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {formatCurrency(opportunity.minimum_investment)}
-              </p>
-            </div>
-            <div className="surface-subtle p-4">
-              <p className="text-xs font-medium text-slate-500">Workflow status</p>
-              <div className="mt-2">
-                <StatusBadge label={formatLabel('pending review')} tone="warning" />
-              </div>
-              <p className="mt-2 leading-6">
-                New requests enter the approval queue immediately after submission.
-              </p>
-            </div>
-          </div>
-        </aside>
-
-        <section className="surface-card p-6 sm:p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
+      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Selected opportunity</CardTitle>
+            <CardDescription>Context for the request you are about to submit.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {opportunity ? (
+              <>
+                <div>
+                  <p className="text-lg font-semibold">{opportunity.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Minimum commitment {formatCurrency(opportunity.minimum_investment)}
+                  </p>
+                </div>
+                <StatusPill value="pending review" />
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Submitted requests move directly into the approval queue and remain visible in the investment ledger.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">{error || 'Loading selected opportunity...'}</p>
             )}
+          </CardContent>
+        </Card>
 
-            <div className="space-y-2">
-              <label htmlFor="amount" className="block text-sm font-medium text-slate-700">
-                Investment amount
-              </label>
-              <input
-                id="amount"
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                min={opportunity.minimum_investment}
-                step="1000"
-                required
-                className="input-field"
-              />
-              <p className="text-sm text-slate-500">
-                Minimum allowed amount is {formatCurrency(opportunity.minimum_investment)}.
-              </p>
-            </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Request details</CardTitle>
+            <CardDescription>Use a clean form surface instead of custom field wrappers.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {error ? (
+                <div className="rounded-3xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                  {error}
+                </div>
+              ) : null}
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={() => router.back()} className="btn-secondary flex-1">
-                Cancel
-              </button>
-              <button type="submit" disabled={submitting} className="btn-primary flex-1">
-                {submitting ? 'Submitting...' : 'Submit request'}
-              </button>
-            </div>
-          </form>
-        </section>
+              <div className="space-y-2">
+                <label htmlFor="amount" className="text-sm font-medium">
+                  Investment amount
+                </label>
+                <Input
+                  id="amount"
+                  type="number"
+                  value={amount}
+                  onChange={(event) => setAmount(event.target.value)}
+                  min={opportunity?.minimum_investment}
+                  step="1000"
+                  required
+                  className="rounded-full"
+                />
+                {opportunity ? (
+                  <p className="text-sm text-muted-foreground">
+                    Minimum allowed amount is {formatCurrency(opportunity.minimum_investment)}.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => router.back()}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1" disabled={submitting || !opportunity}>
+                  {submitting ? 'Submitting...' : 'Submit request'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

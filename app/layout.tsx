@@ -3,9 +3,10 @@ import { Inter, Geist } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth-context'
 import { Navbar } from '@/components/navbar'
-import { cn } from "@/lib/utils";
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,11 +21,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className={cn('font-sans', geist.variable)}>
       <body className={inter.className}>
-        <AuthProvider>
-          <Navbar>{children}</Navbar>
-        </AuthProvider>
+        <TooltipProvider>
+          <AuthProvider>
+            <Navbar>{children}</Navbar>
+          </AuthProvider>
+        </TooltipProvider>
       </body>
     </html>
   )

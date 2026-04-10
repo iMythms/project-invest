@@ -7,14 +7,33 @@ import {
   ArrowRight01Icon,
   Briefcase01Icon,
   ChartLineData01Icon,
+  DollarCircleIcon,
   Invoice03Icon,
+  TaskDaily01Icon,
   Tick02Icon,
 } from '@hugeicons/core-free-icons'
-import { ActivityLineChart, StatusDoughnutChart } from '@/components/dashboard-charts'
-import { AppIcon, IconTile } from '@/components/icons'
-import { EmptyState, LoadingState, MetricCard, PageHeader, SectionCard, StatusBadge } from '@/components/ui'
+import {
+  ActivityLineChart,
+  ApprovalRateRadialChart,
+  RequestCountLineChart,
+  StatusDoughnutChart,
+  VolumeBarChart,
+} from '@/components/dashboard-charts'
+import { AppIcon } from '@/components/icons'
+import { PageHeader } from '@/components/page-header'
+import { StatusPill } from '@/components/status-pill'
 import { useAuth } from '@/lib/auth-context'
 import { formatCurrency, formatDateTime, formatLabel } from '@/lib/format'
+import { buttonVariants } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 interface Opportunity {
   id: string
@@ -67,31 +86,32 @@ export default function DashboardPage() {
     }
 
     if (user && token) {
-      fetchDashboardData()
+      void fetchDashboardData()
     }
   }, [user, token, loading, router])
 
   const fetchDashboardData = async () => {
     try {
-      const headers = {
-        Authorization: `Bearer ${token}`,
+      const headers = { Authorization: `Bearer ${token}` }
+      const opportunitiesResponse = await fetch('/api/opportunities', { headers })
+
+      if (opportunitiesResponse.ok) {
+        setOpportunities(await opportunitiesResponse.json())
       }
 
-      const requests = [
-        fetch('/api/opportunities', { headers }),
-        fetch('/api/investments', { headers }),
-      ]
+      if (user?.role === 'investment_manager') {
+        setInvestments([])
+        setAuditLogs([])
+        return
+      }
+
+      const requests = [fetch('/api/investments', { headers })]
 
       if (user?.role === 'approver') {
         requests.push(fetch('/api/audit-logs?limit=5', { headers }))
       }
 
-      const responses = await Promise.all(requests)
-      const [opportunitiesResponse, investmentsResponse, auditResponse] = responses
-
-      if (opportunitiesResponse.ok) {
-        setOpportunities(await opportunitiesResponse.json())
-      }
+      const [investmentsResponse, auditResponse] = await Promise.all(requests)
 
       if (investmentsResponse.ok) {
         setInvestments(await investmentsResponse.json())
@@ -108,6 +128,28 @@ export default function DashboardPage() {
     }
   }
 
+  const averageMinimum = useMemo(() => {
+    if (opportunities.length === 0) {
+      return 0
+    }
+
+    return (
+      opportunities.reduce((sum, opportunity) => sum + Number.parseFloat(opportunity.minimum_investment), 0) /
+      opportunities.length
+    )
+  }, [opportunities])
+
+  const totalMinimumPipeline = opportunities.reduce(
+    (sum, opportunity) => sum + Number.parseFloat(opportunity.minimum_investment),
+    0
+  )
+
+  const highestMinimum = useMemo(() => {
+    return opportunities.reduce((highest, opportunity) => {
+      return Math.max(highest, Number.parseFloat(opportunity.minimum_investment))
+    }, 0)
+  }, [opportunities])
+
   const pendingCount = investments.filter((investment) => investment.status === 'pending').length
   const approvedCount = investments.filter((investment) => investment.status === 'approved').length
   const rejectedCount = investments.filter((investment) => investment.status === 'rejected').length
@@ -115,58 +157,147 @@ export default function DashboardPage() {
   const recentInvestments = investments.slice(0, 5)
 
   const requestTrend = useMemo(() => {
-    const sorted = [...investments]
-      .sort((left, right) => new Date(left.submitted_at).getTime() - new Date(right.submitted_at).getTime())
-      .slice(-6)
+    const grouped = new Map<string, { label: string; volume: number; count: number }>()
 
-    if (sorted.length === 0) {
-      return {
-        labels: ['No data'],
-        values: [0],
+    investments.forEach((investment) => {
+      const date = new Date(investment.submitted_at)
+      const key = date.toISOString().slice(0, 10)
+      const current = grouped.get(key) ?? {
+        label: trendFormatter.format(date),
+        volume: 0,
+        count: 0,
       }
+
+      current.volume += Number.parseFloat(investment.amount)
+      current.count += 1
+      grouped.set(key, current)
+    })
+
+    const timeline = Array.from(grouped.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .slice(-8)
+      .map(([, value]) => value)
+
+    if (timeline.length === 0) {
+      return { labels: ['No data'], volumes: [0], counts: [0] }
     }
 
     return {
-      labels: sorted.map((investment) => trendFormatter.format(new Date(investment.submitted_at))),
-      values: sorted.map((investment) => Number.parseFloat(investment.amount)),
+      labels: timeline.map((item) => item.label),
+      volumes: timeline.map((item) => item.volume),
+      counts: timeline.map((item) => item.count),
     }
   }, [investments])
 
-  const statusMix = useMemo(
-    () => ({
-      labels: ['Pending', 'Approved', 'Rejected'],
-      values: [pendingCount, approvedCount, rejectedCount],
-    }),
-    [approvedCount, pendingCount, rejectedCount]
-  )
+  const volumeByOpportunity = useMemo(() => {
+    const grouped = new Map<string, number>()
 
-  const topOpportunities = useMemo(() => {
-    return opportunities
+    investments.forEach((investment) => {
+      const current = grouped.get(investment.opportunity.name) ?? 0
+      grouped.set(investment.opportunity.name, current + Number.parseFloat(investment.amount))
+    })
+
+    const ranked = Array.from(grouped.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 5)
+
+    if (ranked.length === 0) {
+      return { labels: ['No data'], values: [0] }
+    }
+
+    return {
+      labels: ranked.map(([label]) => label),
+      values: ranked.map(([, value]) => value),
+    }
+  }, [investments])
+
+  const minimumCommitmentChart = useMemo(() => {
+    const ranked = opportunities
       .slice()
       .sort(
         (left, right) =>
           Number.parseFloat(right.minimum_investment) - Number.parseFloat(left.minimum_investment)
       )
-      .slice(0, 4)
+      .slice(0, 6)
+
+    if (ranked.length === 0) {
+      return { labels: ['No data'], values: [0] }
+    }
+
+    return {
+      labels: ranked.map((opportunity) => opportunity.name),
+      values: ranked.map((opportunity) => Number.parseFloat(opportunity.minimum_investment)),
+    }
   }, [opportunities])
 
+  const minimumSpread = useMemo(() => {
+    const sorted = opportunities
+      .slice()
+      .sort(
+        (left, right) =>
+          Number.parseFloat(left.minimum_investment) - Number.parseFloat(right.minimum_investment)
+      )
+      .slice(0, 8)
+
+    if (sorted.length === 0) {
+      return { labels: ['No data'], values: [0] }
+    }
+
+    return {
+      labels: sorted.map((opportunity) => opportunity.name),
+      values: sorted.map((opportunity) => Number.parseFloat(opportunity.minimum_investment)),
+    }
+  }, [opportunities])
+
+  const topOpportunities = useMemo(
+    () =>
+      opportunities
+        .slice()
+        .sort(
+          (left, right) =>
+            Number.parseFloat(right.minimum_investment) - Number.parseFloat(left.minimum_investment)
+        )
+        .slice(0, 4),
+    [opportunities]
+  )
+
   if (loading || !user) {
-    return <LoadingState label="Loading workspace..." />
+    return null
   }
+
+  const isManager = user.role === 'investment_manager'
+
+  const metrics = isManager
+    ? [
+        { label: 'Open opportunities', value: String(opportunities.length), icon: Briefcase01Icon },
+        { label: 'Average minimum', value: formatCurrency(averageMinimum), icon: DollarCircleIcon },
+        { label: 'Highest minimum', value: formatCurrency(highestMinimum), icon: TaskDaily01Icon },
+        { label: 'Pipeline threshold', value: formatCurrency(totalMinimumPipeline), icon: ChartLineData01Icon },
+      ]
+    : [
+        { label: 'Open opportunities', value: String(opportunities.length), icon: Briefcase01Icon },
+        { label: 'Pending requests', value: String(pendingCount), icon: Invoice03Icon },
+        { label: 'Approved requests', value: String(approvedCount), icon: Tick02Icon },
+        { label: 'Visible volume', value: formatCurrency(totalVolume), icon: ChartLineData01Icon },
+      ]
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Workspace overview"
         title="Dashboard"
-        description={`Signed in as ${user.email}. The workspace emphasizes live queue pressure, visible capital, and the next operational action for the ${user.role} role.`}
+        description={
+          isManager
+            ? `Signed in as ${user.email}. Track active mandates, minimum commitment distribution, and pipeline sizing from one cleaner opportunity workspace.`
+            : `Signed in as ${user.email}. The dashboard is now structured like a clean operating workspace: compact cards first, then charts, then queue and activity detail.`
+        }
         actions={
           <>
-            <Link href="/opportunities" className="btn-secondary">
+            <Link href="/opportunities" className={buttonVariants({ variant: 'outline' })}>
               Review opportunities
             </Link>
-            {(user.role === 'investor' || user.role === 'approver') && (
-              <Link href="/investments" className="btn-primary">
+            {!isManager && (user.role === 'investor' || user.role === 'approver') && (
+              <Link href="/investments" className={buttonVariants()}>
                 Open investments
               </Link>
             )}
@@ -174,235 +305,276 @@ export default function DashboardPage() {
         }
       />
 
-      {dataLoading ? (
-        <LoadingState label="Loading dashboard data..." />
-      ) : (
+      {dataLoading ? null : (
         <>
-          <section className="grid gap-4 xl:grid-cols-[1.55fr_0.9fr]">
-            <div className="surface-card overflow-hidden">
-              <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="max-w-2xl space-y-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">Operating summary</p>
-                    <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-                      A lighter control surface for approvals, pipeline visibility, and capital flow.
-                    </h2>
-                    <p className="text-sm leading-6 text-slate-500">
-                      The dashboard should feel closer to a calm document workspace than a promotional hero, with compact summary blocks and a primary chart surface.
-                    </p>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {metrics.map((metric) => (
+              <Card key={metric.label}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardDescription>{metric.label}</CardDescription>
+                  <div className="flex size-8 items-center justify-center rounded-2xl bg-muted">
+                    <AppIcon icon={metric.icon} size={16} />
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[280px]">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Visible volume</p>
-                      <p className="mt-1.5 text-xl font-semibold text-slate-900">{formatCurrency(totalVolume)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Requests in motion</p>
-                      <p className="mt-1.5 text-xl font-semibold text-slate-900">{pendingCount + approvedCount}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 px-4 py-4 lg:grid-cols-[1.45fr_0.82fr] sm:px-5">
-                <div>
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">Recent request volume</p>
-                      <p className="mt-1 text-[13px] text-slate-500">Latest submitted requests mapped by visible amount.</p>
-                    </div>
-                    <StatusBadge label={`${recentInvestments.length} recent`} tone="brand" />
-                  </div>
-                  <ActivityLineChart labels={requestTrend.labels} values={requestTrend.values} />
-                </div>
-
-                <div className="surface-subtle p-3.5">
-                  <div className="flex items-center gap-3">
-                    <IconTile icon={Invoice03Icon} tone="brand" size={16} />
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">Status distribution</p>
-                      <p className="mt-1 text-[13px] text-slate-500">Current workflow split across all visible requests.</p>
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <StatusDoughnutChart labels={statusMix.labels} values={statusMix.values} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <SectionCard title="Execution notes" description="What matters most right now for this role.">
-              <div className="space-y-3">
-                <div className="surface-subtle flex items-start gap-3 p-4">
-                  <IconTile icon={Invoice03Icon} tone="warning" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      {pendingCount > 0
-                        ? `${pendingCount} request${pendingCount === 1 ? '' : 's'} need a next decision.`
-                        : 'No pending requests are waiting in the queue.'}
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      Approvals should remain the fastest surface in the product, with supporting context adjacent rather than hidden.
-                    </p>
-                  </div>
-                </div>
-                <div className="surface-subtle flex items-start gap-3 p-4">
-                  <IconTile icon={Briefcase01Icon} tone="brand" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      {opportunities.length} open opportunit{opportunities.length === 1 ? 'y' : 'ies'} are available for intake.
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      Opportunity review should stay operational and scannable, not card-heavy or marketing-like.
-                    </p>
-                  </div>
-                </div>
-                <div className="surface-subtle flex items-start gap-3 p-4">
-                  <IconTile icon={Tick02Icon} tone="success" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      {approvedCount} request{approvedCount === 1 ? '' : 's'} already cleared the workflow.
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      Cleared capital should be visible immediately so approvers and investors share the same ledger view.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-semibold tracking-tight">{metric.value}</div>
+                </CardContent>
+              </Card>
+            ))}
           </section>
 
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="Open opportunities"
-              value={String(opportunities.length)}
-              description="Currently available investment opportunities."
-              tone="brand"
-              icon={<IconTile icon={Briefcase01Icon} tone="brand" size={16} />}
-            />
-            <MetricCard
-              label={user.role === 'approver' ? 'Pending approvals' : 'Pending requests'}
-              value={String(pendingCount)}
-              description="Requests waiting for an approval decision."
-              tone="warning"
-              icon={<IconTile icon={Invoice03Icon} tone="warning" size={16} />}
-            />
-            <MetricCard
-              label="Approved requests"
-              value={String(approvedCount)}
-              description="Requests cleared through the workflow."
-              tone="success"
-              icon={<IconTile icon={Tick02Icon} tone="success" size={16} />}
-            />
-            <MetricCard
-              label="Requested volume"
-              value={formatCurrency(totalVolume)}
-              description="Aggregate volume across visible requests."
-              icon={<IconTile icon={ChartLineData01Icon} tone="default" size={16} />}
-            />
-          </section>
+          {isManager ? (
+            <>
+              <section className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Minimum commitment ladder</CardTitle>
+                    <CardDescription>Largest mandate thresholds currently open in the pipeline.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <VolumeBarChart
+                      labels={minimumCommitmentChart.labels}
+                      values={minimumCommitmentChart.values}
+                      label="Minimum commitment"
+                    />
+                  </CardContent>
+                </Card>
 
-          <section className="grid gap-4 xl:grid-cols-[1.15fr_0.95fr]">
-            <SectionCard
-              title={user.role === 'approver' ? 'Review queue' : 'Recent investment activity'}
-              description={
-                user.role === 'approver'
-                  ? 'Latest capital requests surfaced as an operating list instead of isolated cards.'
-                  : 'Track recent requests and jump back into the full ledger.'
-              }
-              actions={
-                <Link href={user.role === 'approver' ? '/approve' : '/investments'} className="btn-secondary">
-                  Open {user.role === 'approver' ? 'approvals' : 'ledger'}
-                </Link>
-              }
-            >
-              {recentInvestments.length === 0 ? (
-                <EmptyState
-                  title="No investment activity yet"
-                  description="Once requests are submitted, the latest activity will appear here for quick review."
-                  action={
-                    (user.role === 'investor' || user.role === 'approver') && (
-                      <Link href="/opportunities" className="btn-primary">
-                        Review open opportunities
-                      </Link>
-                    )
-                  }
-                />
-              ) : (
-                <div className="space-y-2.5">
-                  {recentInvestments.map((investment) => (
-                    <div
-                      key={investment.id}
-                      className="surface-subtle flex flex-col gap-3 p-3.5 sm:flex-row sm:items-start sm:justify-between"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <p className="font-medium text-slate-900">{investment.opportunity.name}</p>
-                          <StatusBadge label={formatLabel(investment.status)} />
-                        </div>
-                        <p className="text-sm text-slate-600">
-                          {formatCurrency(investment.amount)} submitted {formatDateTime(investment.submitted_at)}
-                        </p>
-                        {investment.user ? (
-                          <p className="text-sm text-slate-500">
-                            Requestor: {investment.user.name} ({investment.user.email})
-                          </p>
-                        ) : null}
-                      </div>
-                      <Link href={user.role === 'approver' ? '/approve' : '/investments'} className="btn-secondary">
-                        <span className="inline-flex items-center gap-2">
-                          Open
-                          <AppIcon icon={ArrowRight01Icon} size={16} />
-                        </span>
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Commitment spread</CardTitle>
+                    <CardDescription>How minimum commitments step up across the mandate set.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <ActivityLineChart
+                      labels={minimumSpread.labels}
+                      values={minimumSpread.values}
+                      label="Minimum commitment"
+                    />
+                  </CardContent>
+                </Card>
+              </section>
 
-            <div className="space-y-6">
-              <SectionCard title="Opportunity snapshot" description="Largest visible minimum commitments in the current pipeline.">
-                <div className="space-y-3">
-                  {topOpportunities.length === 0 ? (
-                    <p className="text-sm text-slate-500">No opportunity data is available.</p>
-                  ) : (
-                    topOpportunities.map((opportunity) => (
-                      <div key={opportunity.id} className="surface-subtle flex items-center justify-between gap-4 p-4">
-                        <div>
-                          <p className="font-medium text-slate-900">{opportunity.name}</p>
-                          <p className="mt-1 text-sm text-slate-500">Minimum {formatCurrency(opportunity.minimum_investment)}</p>
-                        </div>
-                        <StatusBadge label={formatLabel(opportunity.status)} tone="brand" />
-                      </div>
-                    ))
-                  )}
-                </div>
-              </SectionCard>
-
-              {user.role === 'approver' && (
-                <SectionCard title="Recent audit events" description="Latest governance events pulled from the audit trail.">
-                  {auditLogs.length === 0 ? (
-                    <p className="text-sm text-slate-500">No recent audit events available.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {auditLogs.map((log) => (
-                        <div key={log.id} className="surface-subtle p-4">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <StatusBadge label={formatLabel(log.action)} tone="brand" />
-                            <p className="text-sm text-slate-500">{formatDateTime(log.timestamp)}</p>
+              <section className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Opportunity snapshot</CardTitle>
+                    <CardDescription>Largest visible minimum commitments in the active pipeline.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-4">
+                    {topOpportunities.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No opportunities are currently visible.</p>
+                    ) : (
+                      topOpportunities.map((opportunity) => (
+                        <div key={opportunity.id} className="flex items-center justify-between rounded-3xl border p-3">
+                          <div>
+                            <p className="font-medium">{opportunity.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Minimum {formatCurrency(opportunity.minimum_investment)}
+                            </p>
                           </div>
-                          <p className="mt-2 text-sm text-slate-600">
-                            {log.user ? `${log.user.name} (${log.user.email})` : 'System event'}
-                          </p>
+                          <StatusPill value={opportunity.status} />
                         </div>
-                      ))}
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Manager workflow</CardTitle>
+                    <CardDescription>Create and publish new opportunities directly from the pipeline page.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-4 text-sm text-muted-foreground">
+                    <p>
+                      Investment managers own mandate intake. Use the opportunities page to open a creation dialog, define the minimum commitment, and publish the new mandate into the visible pipeline.
+                    </p>
+                    <Link href="/opportunities" className={buttonVariants({ variant: 'outline' })}>
+                      Open opportunity manager
+                    </Link>
+                  </CardContent>
+                </Card>
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Capital request volume</CardTitle>
+                    <CardDescription>Requested capital over time across the visible ledger.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <ActivityLineChart labels={requestTrend.labels} values={requestTrend.volumes} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Submission cadence</CardTitle>
+                    <CardDescription>How many requests entered the workflow on each visible period.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <RequestCountLineChart labels={requestTrend.labels} values={requestTrend.counts} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Demand by opportunity</CardTitle>
+                    <CardDescription>Top opportunities ranked by requested capital volume.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <VolumeBarChart labels={volumeByOpportunity.labels} values={volumeByOpportunity.values} label="Requested capital" />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Status mix</CardTitle>
+                    <CardDescription>Current distribution across pending, approved, and rejected requests.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <StatusDoughnutChart
+                      labels={['Pending', 'Approved', 'Rejected']}
+                      values={[pendingCount, approvedCount, rejectedCount]}
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="border-b">
+                    <CardTitle>Approval rate</CardTitle>
+                    <CardDescription>Share of reviewed requests that were approved.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <ApprovalRateRadialChart approved={approvedCount} rejected={rejectedCount} />
+                  </CardContent>
+                </Card>
+              </section>
+
+              <section className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+                <Card>
+                  <CardHeader className="border-b">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <CardTitle>{user.role === 'approver' ? 'Review queue' : 'Recent requests'}</CardTitle>
+                        <CardDescription>
+                          Immediate activity should remain close to the charts, not buried below oversized sections.
+                        </CardDescription>
+                      </div>
+                      <Link
+                        href={user.role === 'approver' ? '/approve' : '/investments'}
+                        className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                      >
+                        Open
+                      </Link>
                     </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Opportunity</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead className="hidden md:table-cell">Submitted</TableHead>
+                          <TableHead className="w-[80px] text-right">Open</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recentInvestments.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                              No recent requests yet.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          recentInvestments.map((investment) => (
+                            <TableRow key={investment.id}>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <p className="font-medium">{investment.opportunity.name}</p>
+                                  {investment.user ? (
+                                    <p className="text-xs text-muted-foreground">{investment.user.email}</p>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <StatusPill value={investment.status} />
+                              </TableCell>
+                              <TableCell>{formatCurrency(investment.amount)}</TableCell>
+                              <TableCell className="hidden md:table-cell">{formatDateTime(investment.submitted_at)}</TableCell>
+                              <TableCell className="text-right">
+                                <Link
+                                  href={user.role === 'approver' ? '/approve' : '/investments'}
+                                  className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+                                >
+                                  <AppIcon icon={ArrowRight01Icon} size={14} />
+                                </Link>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <div className="grid gap-4">
+                  <Card>
+                    <CardHeader className="border-b">
+                      <CardTitle>Opportunity snapshot</CardTitle>
+                      <CardDescription>Largest visible minimum commitments in the active pipeline.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3 pt-4">
+                      {topOpportunities.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No opportunities are currently visible.</p>
+                      ) : (
+                        topOpportunities.map((opportunity) => (
+                          <div key={opportunity.id} className="flex items-center justify-between rounded-3xl border p-3">
+                            <div>
+                              <p className="font-medium">{opportunity.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Minimum {formatCurrency(opportunity.minimum_investment)}
+                              </p>
+                            </div>
+                            <StatusPill value={opportunity.status} />
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {user.role === 'approver' && (
+                    <Card>
+                      <CardHeader className="border-b">
+                        <CardTitle>Recent audit events</CardTitle>
+                        <CardDescription>Latest governance activity from the audit trail.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3 pt-4">
+                        {auditLogs.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No recent audit events available.</p>
+                        ) : (
+                          auditLogs.map((log) => (
+                            <div key={log.id} className="rounded-3xl border p-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <StatusPill value={formatLabel(log.action)} />
+                                <span className="text-xs text-muted-foreground">{formatDateTime(log.timestamp)}</span>
+                              </div>
+                              <p className="mt-2 text-sm text-muted-foreground">
+                                {log.user ? `${log.user.name} (${log.user.email})` : 'System event'}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
-                </SectionCard>
-              )}
-            </div>
-          </section>
+                </div>
+              </section>
+            </>
+          )}
         </>
       )}
     </div>

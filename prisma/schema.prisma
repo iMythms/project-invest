@@ -13,6 +13,7 @@ datasource db {
 enum UserRole {
   viewer
   investor
+  investment_manager
   approver
 }
 
