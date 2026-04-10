@@ -1,40 +1,234 @@
 # Family Office Investment Portal
 
-A professional B2B investment portal for family offices with multi-user authentication, role-based access control, investment opportunity browsing, request workflows, and comprehensive audit logging.
+Professional B2B investment portal for family offices with multi-user authentication, role-based access control, investment opportunity browsing, request workflows, and comprehensive audit logging.
 
-## Tech Stack
+**Source of truth:** Repository inspection and validated runtime state.
 
-- **Frontend:** Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **Backend:** Next.js API Routes (serverless functions)
-- **Database:** PostgreSQL
-- **ORM:** Prisma
-- **Authentication:** JWT with bcrypt password hashing
+---
 
-## Features
+## Part I: Architecture & Governance
 
-### Core Functionality
-- Multi-user authentication with JWT tokens
-- Role-based access control (viewer, investor, approver)
-- Investment opportunity browsing
-- Investment request submission and tracking
-- Approval workflow for investment requests
-- Comprehensive audit logging
+### Architecture Diagram
 
-### User Roles
+Source of truth: API routes in `app/api/*/route.ts`, Prisma schema in `prisma/schema.prisma`, page components in `app/*/page.tsx`.
+
+```mermaid
+architecture-beta
+    group public[Public Layer]
+    service landing(app/page.tsx)
+    service login(app/login/page.tsx)
+    
+    group authenticated[Authenticated Shell]
+    service sidebar(components/ui/sidebar.tsx)
+    service dashboard(app/dashboard/page.tsx)
+    service opportunities(app/opportunities/page.tsx)
+    service investments(app/investments/page.tsx)
+    service approve(app/approve/page.tsx)
+    service audit(app/audit/page.tsx)
+    
+    group api[API Layer]
+    service authRoute(api/auth/route.ts)
+    service oppRoute(api/opportunities/route.ts)
+    service invRoute(api/investments/route.ts)
+    service auditRoute(api/audit-logs/route.ts)
+    
+    group data[Data Layer]
+    service postgres(PostgreSQL 15)
+    service prismaClient(lib/db.ts)
+    
+    group auth[Auth Layer]
+    service jwt(lib/auth.ts)
+    service apiGuard(lib/api-auth.ts)
+    
+    edge landing -> login
+    edge login -> authRoute
+    edge authRoute -> jwt
+    edge jwt -> prismaClient
+    
+    edge sidebar -> dashboard
+    edge dashboard -> oppRoute
+    edge opportunities -> oppRoute
+    edge investments -> invRoute
+    edge approve -> invRoute
+    edge audit -> auditRoute
+    
+    edge oppRoute -> apiGuard
+    edge invRoute -> apiGuard
+    edge auditRoute -> apiGuard
+    
+    edge apiGuard -> prismaClient
+    edge prismaClient -> postgres
+```
+
+### Authentication & Authorization
+
+Source of truth: `lib/auth.ts`, `lib/api-auth.ts`, `prisma/schema.prisma`.
+
+**Authentication:**
+- JWT tokens with 7-day expiration
+- Password hashing with bcrypt (10 rounds)
+- Token verification on every protected API route
+
+**Authorization Matrix:**
+
+| Endpoint | Viewer | Investor | Approver |
+|----------|:------:|:--------:|:--------:|
+| GET /api/opportunities | ✓ | ✓ | ✓ |
+| GET /api/opportunities/:id | ✓ | ✓ | ✓ |
+| POST /api/investments | ✗ | ✓ | ✓ |
+| GET /api/investments (own) | ✓ | ✓ | ✓ |
+| GET /api/investments (all) | ✗ | ✗ | ✓ |
+| PATCH /api/investments/:id/approve | ✗ | ✗ | ✓ |
+| PATCH /api/investments/:id/reject | ✗ | ✗ | ✓ |
+| GET /api/audit-logs | ✗ | ✗ | ✓ |
+
+**Role Capabilities:**
+
 | Role | View Opportunities | View Own Investments | View All Investments | Submit Investment | Approve/Reject | View Audit Logs |
 |------|:------------------:|:--------------------:|:--------------------:|:-----------------:|:--------------:|:---------------:|
 | Viewer | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | Investor | ✓ | ✓ | ✗ | ✓ | ✗ | ✗ |
 | Approver | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-## Setup Instructions
+### Database Schema
 
-### Prerequisites
-- Node.js 18+ 
-- PostgreSQL database
+Source of truth: `prisma/schema.prisma`.
+
+| Model | Fields | Relations |
+|-------|--------|-----------|
+| FamilyOffice | id, name, createdAt, updatedAt | users[] |
+| User | id, email, password_hash, name, role, family_office_id | familyOffice, investmentRequests[], reviewedRequests[], auditLogs[] |
+| InvestmentOpportunity | id, name, description, minimum_investment, status | investmentRequests[] |
+| InvestmentRequest | id, user_id, opportunity_id, amount, status, submitted_at, reviewed_at, reviewed_by, notes | user, opportunity, reviewer |
+| AuditLog | id, user_id, action, entity_type, entity_id, details, ip_address, timestamp | user? |
+
+**Enums:**
+- UserRole: viewer, investor, approver
+- OpportunityStatus: open, closed
+- RequestStatus: pending, approved, rejected
+
+### Security Controls
+
+Source of truth: `lib/auth.ts`, `lib/api-auth.ts`.
+
+| Control | Implementation |
+|---------|----------------|
+| Password storage | bcrypt hash with 10 rounds |
+| Token format | JWT signed with server secret |
+| Token expiration | 7 days |
+| Route protection | `requireAuth()` and `requireRole()` middleware |
+| Authorization enforcement | Backend validates role on every request |
+| Secrets management | Environment variables required |
+
+### Audit Logging
+
+Source of truth: `prisma/schema.prisma` AuditLog model, `app/api/audit-logs/route.ts`.
+
+| Field | Purpose |
+|-------|---------|
+| action | Type of action (login, submit_investment, approve_investment, reject_investment) |
+| entity_type | Type of entity affected |
+| entity_id | ID of affected entity |
+| details | JSON context with additional information |
+| ip_address | User IP address (optional) |
+| timestamp | When action occurred |
+
+**Logged Actions:**
+- Login attempts (successful and failed)
+- Investment request submissions
+- Investment approvals and rejections
+
+### Backup & Disaster Recovery
+
+Source of truth: repository deployment model and currently available operational evidence.
+
+A formal DR plan is not currently documented for this repository. DR planning is still expected and should be introduced. Estimated implementation difficulty: medium, because application redeployment is straightforward from source and CI/CD (none configured yet), but PostgreSQL database backup and recovery objectives still need explicit definition and tested runbooks.
+
+---
+
+## Part II: Developer Guide
+
+### Tech Stack
+
+Source of truth: `package.json`, `knowledge/stack.md`.
+
+| Layer | Technology | Version |
+|-------|------------|---------|
+| Frontend | Next.js | 16.2.3 |
+| Frontend | React | 19.2.5 |
+| Language | TypeScript | 6.0.2 |
+| Styling | Tailwind CSS | 4.2.2 |
+| Database | PostgreSQL | 15 |
+| ORM | Prisma | 5.22.0 |
+| Auth | JWT + bcrypt | 9.0.3 / 6.0.0 |
+| Charts | Chart.js + react-chartjs-2 | 4.5.1 / 5.3.1 |
+
+**Key Dependencies:**
+
+| Package | Purpose |
+|---------|---------|
+| @hugeicons/react | Icon system |
+| @base-ui/react | UI primitives |
+| class-variance-authority | Component variants |
+| clsx + tailwind-merge | Class utilities |
+
+### Configuration
+
+Source of truth: `.env` requirements from `lib/auth.ts` and `prisma/schema.prisma`.
+
+Required environment variables:
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/project_invest?schema=public"
+JWT_SECRET="your-secret-key-change-in-production"
+```
+
+### Project Structure
+
+Source of truth: repository directory inspection.
+
+```
+project-invest/
+├── app/
+│   ├── api/
+│   │   ├── auth/route.ts
+│   │   ├── opportunities/route.ts, [id]/route.ts
+│   │   ├── investments/route.ts, [id]/route.ts, [id]/approve/route.ts, [id]/reject/route.ts
+│   │   └── audit-logs/route.ts
+│   ├── page.tsx, page-client.tsx (landing)
+│   ├── login/page.tsx
+│   ├── dashboard/page.tsx
+│   ├── opportunities/page.tsx
+│   ├── investments/page.tsx, new/page.tsx
+│   ├── approve/page.tsx
+│   └── audit/page.tsx
+├── components/
+│   ├── ui/button.tsx, sidebar.tsx, card.tsx, badge.tsx, table.tsx, input.tsx, etc.
+│   ├── navbar.tsx, status-pill.tsx, dashboard-charts.tsx
+├── lib/
+│   ├── db.ts (Prisma client)
+│   ├── auth.ts (JWT, bcrypt)
+│   ├── api-auth.ts (route guards)
+│   └── auth-context.tsx (frontend auth state)
+├── prisma/
+│   ├── schema.prisma
+│   └── seed.ts
+├── knowledge/
+│   ├── stack.md, schema.md, api-endpoints.md
+├── .opencode/skills/docs/SKILL.md
+├── AGENTS.md, IDENTITY.md, KNOWLEDGE.md, DESIGN.md, GOAL.md
+```
+
+### Setup Instructions
+
+Source of truth: validated runtime steps from compressed conversation section b1.
+
+**Prerequisites:**
+- Node.js 18+
+- PostgreSQL 15
 - npm or yarn
 
-### Installation
+**Installation:**
 
 1. Clone the repository:
    ```bash
@@ -48,127 +242,162 @@ A professional B2B investment portal for family offices with multi-user authenti
    ```
 
 3. Set up environment variables:
-   Create a `.env` file in the root directory:
+   Create `.env` file:
    ```env
    DATABASE_URL="postgresql://user:password@localhost:5432/project_invest?schema=public"
    JWT_SECRET="your-secret-key-change-in-production"
    ```
 
-4. Initialize the database:
+4. Initialize database (PostgreSQL must be running):
    ```bash
    npm run db:push
    ```
 
-5. Seed the database with test data:
+5. Seed test data:
    ```bash
    npm run db:seed
    ```
 
-6. Run the development server:
+6. Run development server:
    ```bash
    npm run dev
    ```
 
-7. Open [http://localhost:3000](http://localhost:3000) in your browser.
+7. Open http://localhost:3000
 
-### Database Commands
+**Database Commands:**
 
-- `npm run db:migrate` - Create and run migrations
-- `npm run db:push` - Push schema changes to database (no migrations)
-- `npm run db:seed` - Seed database with test data
-- `npm run db:studio` - Open Prisma Studio (database GUI)
+| Command | Purpose |
+|---------|---------|
+| npm run db:migrate | Create and run migrations |
+| npm run db:push | Push schema changes (no migrations) |
+| npm run db:seed | Seed test data |
+| npm run db:studio | Open Prisma Studio GUI |
 
-## Test Accounts
+### Test Accounts
 
-After seeding, you can login with these accounts (password: `password123`):
+Source of truth: seed data from compressed conversation section b1.
 
-- **Viewer:** viewer@test.com
-- **Investor:** investor@test.com  
-- **Approver:** approver@test.com
+After seeding, login with these accounts (password: `password123`):
 
-## Project Structure
+| Email | Role |
+|-------|------|
+| viewer@test.com | Viewer |
+| investor@test.com | Investor |
+| approver@test.com | Approver |
 
-```
-project-invest/
-├── app/
-│   ├── api/           # API routes
-│   │   ├── auth/      # Authentication endpoints
-│   │   ├── opportunities/
-│   │   ├── investments/
-│   │   └── audit-logs/
-│   ├── login/         # Login page
-│   ├── dashboard/     # Dashboard page
-│   ├── opportunities/ # Opportunities list
-│   ├── investments/   # Investment requests
-│   ├── approve/       # Approval page (approver only)
-│   └── audit/         # Audit logs (approver only)
-├── components/        # Shared components
-├── lib/               # Utilities and helpers
-│   ├── db.ts          # Prisma client
-│   ├── auth.ts        # Authentication helpers
-│   ├── api-auth.ts    # API route authentication
-│   └── auth-context.tsx # Frontend auth context
-├── prisma/
-│   ├── schema.prisma  # Database schema
-│   └── seed.ts        # Seed data
-└── knowledge/         # Project knowledge base (for AI agent)
+### API Request Formats
+
+Source of truth: `app/api/*/route.ts` files.
+
+**Authentication:**
+
+```bash
+POST /api/auth
+Content-Type: application/json
+
+{
+  "email": "approver@test.com",
+  "password": "password123",
+  "action": "login"
+}
+
+Response: { "token": "jwt_token", "user": { ... } }
 ```
 
-## API Endpoints
+**Investment Request:**
 
-### Authentication
-- `POST /api/auth` - Login (returns JWT)
-- `PUT /api/auth` - Register user
+```bash
+POST /api/investments
+Authorization: Bearer <token>
+Content-Type: application/json
 
-### Investment Opportunities
-- `GET /api/opportunities` - List open opportunities
-- `GET /api/opportunities/:id` - Get opportunity details
+{
+  "opportunityId": "uuid",
+  "amount": 100000
+}
+```
 
-### Investment Requests
-- `POST /api/investments` - Submit investment request
-- `GET /api/investments` - List investments (filtered by role)
-- `GET /api/investments/:id` - Get investment details
-- `PATCH /api/investments/:id/approve` - Approve request
-- `PATCH /api/investments/:id/reject` - Reject request
+**Approve/Reject:**
 
-### Audit Logs
-- `GET /api/audit-logs` - Get audit logs (approver only)
+```bash
+PATCH /api/investments/:id/approve
+Authorization: Bearer <token>
+Content-Type: application/json
 
-## Development Notes
+{
+  "notes": "Approved for portfolio allocation"
+}
+```
 
-### Design Decisions
-- **Monorepo approach:** Single repository for frontend and backend using Next.js API routes
-- **Prisma:** Type-safe database access with auto-generated TypeScript types
-- **App Router:** Modern Next.js patterns with server/client components
-- **Tailwind CSS:** Rapid prototyping with professional B2B aesthetic
+### Design System
 
-### Security Considerations
-- JWT tokens expire after 7 days
-- Passwords hashed with bcrypt (10 rounds)
-- Role-based authorization enforced on API routes
-- Audit logging for all critical actions
-- No hardcoded secrets (environment variables required)
+Source of truth: `DESIGN.md`.
 
-### Future Improvements
-- Bulk approve/reject functionality
-- Email notifications for approvals/rejections
-- Real-time updates with WebSocket or polling
-- Export audit logs to CSV/PDF
-- Dashboard analytics and charts
-- Two-factor authentication
+**Visual Theme:**
+- Light-first, institutional aesthetic
+- Left sidebar shell for authenticated pages
+- Deep blue (`trust-700`) as primary accent
+- Muted semantic colors for status
+- Tables and workflow views drive product identity
 
-## AI Tool Usage
+**Color Palette:**
 
-This project was built using AI assistance (Ember, an AI coding agent):
-- Project scaffolding and architecture decisions
-- Database schema design and Prisma setup
-- API route implementation
-- Frontend components and pages
-- Authentication system
-- Test data seeding
+| Token | Hex | Role |
+|-------|-----|------|
+| trust-700 | #1D4ED8 | Primary action, active nav |
+| trust-600 | #2563EB | Primary button background |
+| ink-950 | #0F172A | Primary headings |
+| slate-700 | #334155 | Default body text |
+| cloud-50 | #F8FAFC | App canvas |
+| white | #FFFFFF | Cards, panels |
 
-All AI-generated code was reviewed and tested to ensure correctness and security.
+### Deployment Considerations
 
-## License
+Source of truth: package.json build configuration.
 
-ISC
+**Build Command:**
+```bash
+npm run build  # Runs: prisma generate && next build
+```
+
+**Production Start:**
+```bash
+npm run start  # Runs: next start
+```
+
+**Considerations:**
+- Requires PostgreSQL instance
+- JWT_SECRET must be production-strength random
+- No CI/CD configured (manual deployment)
+- Stateless app (JWT tokens, no server sessions)
+
+---
+
+## Resources
+
+### Repository Files
+
+- [prisma/schema.prisma](./prisma/schema.prisma) - Database schema definition
+- [lib/auth.ts](./lib/auth.ts) - JWT and bcrypt authentication
+- [lib/api-auth.ts](./lib/api-auth.ts) - API route guards
+- [DESIGN.md](./DESIGN.md) - Design system specification
+- [GOAL.md](./GOAL.md) - Project objectives and grading criteria
+- [knowledge/api-endpoints.md](./knowledge/api-endpoints.md) - API specification
+- [knowledge/stack.md](./knowledge/stack.md) - Technology decisions
+
+### External Documentation
+
+- [Next.js Documentation](https://nextjs.org/docs) - App Router, API routes
+- [Prisma Documentation](https://www.pris.ly/d/prisma-schema) - ORM and schema
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/15/index.html) - Database
+- [JWT Introduction](https://jwt.io/introduction) - Token authentication
+- [bcrypt npm](https://www.npmjs.com/package/bcrypt) - Password hashing
+- [Tailwind CSS v4](https://tailwindcss.com/docs) - Styling
+- [Chart.js](https://www.chartjs.org/docs/) - Data visualization
+- [Mermaid Architecture Syntax](https://mermaid.js.org/syntax/architecture) - Diagram format
+
+### Project-Specific
+
+- [AGENTS.md](./AGENTS.md) - Agent directives and memory architecture
+- [.opencode/skills/docs/SKILL.md](./.opencode/skills/docs/SKILL.md) - Documentation skill
