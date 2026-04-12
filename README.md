@@ -159,7 +159,7 @@ A formal DR plan is not currently documented for this repository. DR planning is
 
 ### Tech Stack
 
-Source of truth: `package.json`, `knowledge/stack.md`.
+Source of truth: `package.json`.
 
 | Layer | Technology | Version |
 |-------|------------|---------|
@@ -225,10 +225,7 @@ project-invest/
 ├── prisma/
 │   ├── schema.prisma
 │   └── seed.ts
-├── knowledge/
-│   ├── stack.md, schema.md, api-endpoints.md
-├── .opencode/skills/docs/SKILL.md
-├── AGENTS.md, IDENTITY.md, KNOWLEDGE.md, DESIGN.md, GOAL.md
+├── DESIGN.md, GOAL.md
 ```
 
 ### Setup Instructions
@@ -412,8 +409,6 @@ npm run start  # Runs: next start
 - [lib/api-auth.ts](./lib/api-auth.ts) - API route guards
 - [DESIGN.md](./DESIGN.md) - Design system specification
 - [GOAL.md](./GOAL.md) - Project objectives and grading criteria
-- [knowledge/api-endpoints.md](./knowledge/api-endpoints.md) - API specification
-- [knowledge/stack.md](./knowledge/stack.md) - Technology decisions
 
 ### External Documentation
 
@@ -426,11 +421,6 @@ npm run start  # Runs: next start
 - [shadcn/ui](https://ui.shadcn.com/) - UI component registry and patterns
 - [Recharts](https://recharts.org/en-US) - Chart rendering library
 - [Mermaid Architecture Syntax](https://mermaid.js.org/syntax/architecture) - Diagram format
-
-### Project-Specific
-
-- [AGENTS.md](./AGENTS.md) - Agent directives and memory architecture
-- [.opencode/skills/docs/SKILL.md](./.opencode/skills/docs/SKILL.md) - Documentation skill
 
 ---
 
@@ -457,12 +447,3 @@ OpenCode was used throughout development as a coding agent assistant.
 - Used grep and glob to search codebase patterns
 - Verified changes by running `npm run build` after modifications
 - Committed and pushed changes incrementally
-
-**Agent memory system:**
-
-The repository uses an agent memory architecture defined in `AGENTS.md`:
-- `knowledge/` directory stores factual system state
-- `notes/` directory stores daily development trail
-- OpenCode reads these files at session start to restore context
-
-See `AGENTS.md` for the full memory architecture specification.
